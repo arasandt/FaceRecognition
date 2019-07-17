@@ -3,18 +3,21 @@ from __future__ import print_function
 
 from glob import iglob
 from utils import getFileTime, getFileHex
-from datetime import timedelta
+from datetime import timedelta, datetime
+from dateutil import tz
 
 import win32pipe, win32file
 import os, cv2, sys, time
 import random
+
+data_retention = 20
 
 def check_auth(label_id, office, floor):
     label_id = str(label_id)
     office = str(office)
     floor = str(floor)
     
-    authorized = {'128537': ['Not Active','KNC', '6']}
+    authorized = {'128537': ['Active','KNC', '6']}
     
     msg = ['Welcome..','Unknown','Not Authorized', 'Not Authorized for entry into ','Not Authorized for entry into floor ']
     
@@ -24,7 +27,7 @@ def check_auth(label_id, office, floor):
                 if authorized[label_id][2] == floor:
                     ret_msg = msg[0]
                 else:
-                    ret_msg = msg[4] + office + ' ' + floor
+                    ret_msg = msg[4] + office + '#' + floor
             else:
                 ret_msg = msg[3] + office
         else:
@@ -33,6 +36,26 @@ def check_auth(label_id, office, floor):
         ret_msg = msg[1] 
     return label_id + '_' + ret_msg
     
+
+class Person_Details():
+    
+    def __init__(self, label_id):
+        self.id = label_id
+        self.time_keeper = None
+        self.counter = 0
+    
+    def set_time(self, time_k):
+        self.time_keeper = time_k.replace(tzinfo=tz.gettz('America/New_York'))
+        self.time_keeper_fmt = self.time_keeper.strftime('%m/%d/%Y %I:%M:%S %p')
+    
+    def increment_count(self):
+        self.counter += 1
+        
+    def send_to_display(self, func, office, floor):
+        if self.counter == 5:
+            auth_detail = func(self.id,office,floor) + '__' + self.time_keeper_fmt
+            win32file.WriteFile(pipe, auth_detail.encode())
+        
 
 #data_hex = ['1d4750c785cec00']
 #data_time = ['11/05/2018 08:35:52 AM']
@@ -72,7 +95,28 @@ def create_pipe():
 
 def close_pipe(pipe):
     win32file.CloseHandle(pipe)
+
+
+def print_details(person_detail):
+    for i,j in person_detail.items():
+        #print('{0} {1} {2}'.format(i,j.counter,j.time_keeper_fmt))
+        n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
+        secs = n - j.time_keeper        
+        print('{0} {1} expiring in {2} sec..'.format(i,j.counter,int(data_retention - secs.total_seconds())))
     
+    
+def remove_old_items(person_detail):
+    remove = []
+    for i,j in person_detail.items():
+            n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
+            now = n - timedelta(seconds=data_retention)
+            if j.time_keeper >= now:
+                pass
+            else:
+                remove.append(i)
+    
+    [person_detail.pop(i) for i in remove]
+    return person_detail     
         
 def process_video_feed(filename, pipe):
     name_with_ext = os.path.basename(filename)
@@ -108,22 +152,42 @@ def process_video_feed(filename, pipe):
         
         # get label of persons identified and details
         #label_id = 128537
+        
         label_id = random.randint(128537,128541)
         
+        
+        
         if person_detail.get(label_id, 0) == 0:
-            person_detail[label_id] = 1
+            #person_detail[label_id] = [1,datetime.now().replace(tzinfo=tz.gettz('America/New_York'))]
+            person_detail[label_id] = Person_Details(label_id)
+            #person_detail[label_id].set_time(datetime.now())
+        #else:
+#            person_detail[label_id][0] += 1
+        if label_id == 128537 and person_detail[label_id].counter > 10:
+            pass
         else:
-            person_detail[label_id] += 1
+            person_detail[label_id].set_time(datetime.now())
+                #person_detail[label_id][1] = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
             
-        print(person_detail)
-        if person_detail[label_id] == 5:
-            auth_detail = check_auth(label_id, office, floor) 
-            win32file.WriteFile(pipe, auth_detail.encode())
+        person_detail[label_id].increment_count()
+        person_detail[label_id].send_to_display(check_auth, office, floor)
+        
+        #if person_detail[label_id].counter == 5:
+        #    auth_detail = check_auth(label_id, office, floor) + '__' + person_detail[label_id].time_keeper.strftime('%m/%d/%Y %I:%M:%S %p')
+        #    win32file.WriteFile(pipe, auth_detail.encode())
         #for i,j in person_detail.items():
         #    if j == 10:
         #        win32file.WriteFile(pipe, str(i).encode())
                 
         # if person has not been detected at all the empty out person_detail.
+        
+        person_detail = remove_old_items(person_detail)
+        print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
+        print_details(person_detail)
+        
+        #for i , j in person_detail.items():
+        #    print('{0} {1} {2}'.format(i,j[0],j[1].strftime('%m/%d/%Y %I:%M:%S %p %Z')))
+        
         
         time.sleep(1)
         count += 1     
@@ -153,3 +217,9 @@ if __name__ == '__main__':
         #close_pipe(pipe)        
         print('Training Complete..')
 
+    
+    if action == 'enroll':
+        #pipe = create_pipe()
+        #pipe = process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4', pipe)
+        #close_pipe(pipe)        
+        print('Enroll Complete. Please re-train..')
