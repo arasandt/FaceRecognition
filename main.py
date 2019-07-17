@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-from glob import iglob
-from utils import getFileTime, getFileHex
+#from glob import iglob
+from utils import getFileTime #, getFileHex
 from datetime import timedelta, datetime
 from dateutil import tz
 
@@ -10,16 +10,20 @@ import win32pipe, win32file
 import os, cv2, sys, time
 import random
 
-data_retention = 20
+data_retention = 10
 
 def check_auth(label_id, office, floor):
     label_id = str(label_id)
     office = str(office)
     floor = str(floor)
     
-    authorized = {'128537': ['Active','KNC', '6']}
+    authorized = {'128537': ['Active','KNC', '6'],
+                  '128538': ['InActive','KNC', '6'],
+                  '128539': ['Active','CKC', '6'],
+                  '128540': ['Active','KNC', '5',],
+                  }
     
-    msg = ['Welcome..','Unknown','Not Authorized', 'Not Authorized for entry into ','Not Authorized for entry into floor ']
+    msg = ['Welcome..','Not Authorized', 'Not Authorized for entry into ','Not Authorized for entry into floor ']
     
     if label_id in authorized.keys():
         if authorized[label_id][0] == 'Active':
@@ -27,11 +31,11 @@ def check_auth(label_id, office, floor):
                 if authorized[label_id][2] == floor:
                     ret_msg = msg[0]
                 else:
-                    ret_msg = msg[4] + office + '#' + floor
+                    ret_msg = msg[3] + office + '#' + floor
             else:
-                ret_msg = msg[3] + office
+                ret_msg = msg[2] + office
         else:
-            ret_msg = msg[2] 
+            ret_msg = msg[1] 
     else:
         ret_msg = msg[1] 
     return label_id + '_' + ret_msg
@@ -39,10 +43,14 @@ def check_auth(label_id, office, floor):
 
 class Person_Details():
     
+    minimum_hit = 5
+    
     def __init__(self, label_id):
         self.id = label_id
         self.time_keeper = None
         self.counter = 0
+        self.displayed = False
+        self.displayed_time = None
     
     def set_time(self, time_k):
         self.time_keeper = time_k.replace(tzinfo=tz.gettz('America/New_York'))
@@ -52,9 +60,11 @@ class Person_Details():
         self.counter += 1
         
     def send_to_display(self, func, office, floor):
-        if self.counter == 5:
+        if self.counter == self.minimum_hit:
             auth_detail = func(self.id,office,floor) + '__' + self.time_keeper_fmt
             win32file.WriteFile(pipe, auth_detail.encode())
+            self.displayed = True
+            self.displayed_time = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
         
 
 #data_hex = ['1d4750c785cec00']
@@ -101,8 +111,14 @@ def print_details(person_detail):
     for i,j in person_detail.items():
         #print('{0} {1} {2}'.format(i,j.counter,j.time_keeper_fmt))
         n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
-        secs = n - j.time_keeper        
-        print('{0} {1} expiring in {2} sec..'.format(i,j.counter,int(data_retention - secs.total_seconds())))
+        if j.displayed_time is not None:
+            secs = n - j.displayed_time        
+            print('{0} {1} expiring in {2} sec..'.format(i,j.counter,int(data_retention - secs.total_seconds())))      
+        else:
+            secs = n         
+            #print('{0} {1} expiring in {2} sec..'.format(i,j.counter,data_retention))            
+            print('{0} {1}'.format(i,j.counter))            
+        #print('{0}'.format(i))
     
     
 def remove_old_items(person_detail):
@@ -110,10 +126,11 @@ def remove_old_items(person_detail):
     for i,j in person_detail.items():
             n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
             now = n - timedelta(seconds=data_retention)
-            if j.time_keeper >= now:
-                pass
-            else:
-                remove.append(i)
+            if j.displayed_time is not None:
+                if j.displayed_time >= now:
+                    pass
+                else:
+                    remove.append(i)
     
     [person_detail.pop(i) for i in remove]
     return person_detail     
@@ -163,14 +180,19 @@ def process_video_feed(filename, pipe):
             #person_detail[label_id].set_time(datetime.now())
         #else:
 #            person_detail[label_id][0] += 1
-        if label_id == 128537 and person_detail[label_id].counter > 10:
-            pass
-        else:
-            person_detail[label_id].set_time(datetime.now())
+        #if label_id == 128537 and person_detail[label_id].counter > 10:
+        #    pass
+        #elif person_detail[label_id].counter > 25:
+        #    pass
+        #else:
+        #    person_detail[label_id].set_time(datetime.now())
                 #person_detail[label_id][1] = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
             
         person_detail[label_id].increment_count()
-        person_detail[label_id].send_to_display(check_auth, office, floor)
+        person_detail[label_id].set_time(datetime.now())
+
+        if not person_detail[label_id].displayed:
+            person_detail[label_id].send_to_display(check_auth, office, floor)
         
         #if person_detail[label_id].counter == 5:
         #    auth_detail = check_auth(label_id, office, floor) + '__' + person_detail[label_id].time_keeper.strftime('%m/%d/%Y %I:%M:%S %p')
