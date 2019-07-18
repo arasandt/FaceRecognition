@@ -1,2 +1,3 @@
 streaming/
 *.pyc
+*.cmd
