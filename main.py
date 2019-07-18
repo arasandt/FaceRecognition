@@ -1,8 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-#from glob import iglob
-from utils import getFileTime #, getFileHex
+from utils import getFileTime
 from datetime import timedelta, datetime
 from dateutil import tz
 
@@ -66,34 +65,6 @@ class Person_Details():
             self.displayed = True
             self.displayed_time = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
         
-
-#data_hex = ['1d4750c785cec00']
-#data_time = ['11/05/2018 08:35:52 AM']
-#print(data_hex[0], "-->", getFileTime(data_hex[0]).strftime('%m/%d/%Y %I:%M:%S %p %Z'))
-#print(data_time[0], "EST -->", getFileHex(data_time[0]))
-#
-
-#def run():
-#    input_video_folder = 'input'
-#    input_video_format = 'mp4'
-#    for filename in iglob(os.path.join(input_video_folder,'*.' + input_video_format), recursive=False):    
-#        name_with_ext = os.path.basename(filename).replace('.' + input_video_format,'')
-#        timestamp, office, floor, camera_name, camera_id = name_with_ext.split('_')
-#        timestamp = getFileTime(timestamp)
-#        
-#        video = cv2.VideoCapture(filename)
-#        
-#        fps = video.get(cv2.CAP_PROP_FPS)
-#        total_frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
-#        width = video.get(cv2.CAP_PROP_FRAME_WIDTH)
-#        height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
-#        
-#        video.release()
-#        
-#        duration = total_frames // fps 
-#        end_time = timestamp + timedelta(seconds=duration) 
-#        print(timestamp, office, floor, camera_name, camera_id, fps, total_frames, width, height, duration, end_time)
-
 def create_pipe():
     pipe = win32pipe.CreateNamedPipe(r'\\.\pipe\Foo',
                                      win32pipe.PIPE_ACCESS_DUPLEX,
@@ -106,19 +77,15 @@ def create_pipe():
 def close_pipe(pipe):
     win32file.CloseHandle(pipe)
 
-
 def print_details(person_detail):
     for i,j in person_detail.items():
-        #print('{0} {1} {2}'.format(i,j.counter,j.time_keeper_fmt))
         n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
         if j.displayed_time is not None:
             secs = n - j.displayed_time        
             print('{0} {1} expiring in {2} sec..'.format(i,j.counter,int(data_retention - secs.total_seconds())))      
         else:
             secs = n         
-            #print('{0} {1} expiring in {2} sec..'.format(i,j.counter,data_retention))            
             print('{0} {1}'.format(i,j.counter))            
-        #print('{0}'.format(i))
     
     
 def remove_old_items(person_detail):
@@ -148,8 +115,6 @@ def process_video_feed(filename, pipe):
     width = video.get(cv2.CAP_PROP_FRAME_WIDTH)
     height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
     
-    
-    
     duration = total_frames // fps 
     end_time = timestamp + timedelta(seconds=duration) 
     print(timestamp, office, floor, camera_name, camera_id, fps, total_frames, width, height, duration, end_time)    
@@ -168,47 +133,22 @@ def process_video_feed(filename, pipe):
         # send frame for face detection and recognition
         
         # get label of persons identified and details
-        #label_id = 128537
         
+
         label_id = random.randint(128537,128541)
         
-        
-        
         if person_detail.get(label_id, 0) == 0:
-            #person_detail[label_id] = [1,datetime.now().replace(tzinfo=tz.gettz('America/New_York'))]
             person_detail[label_id] = Person_Details(label_id)
-            #person_detail[label_id].set_time(datetime.now())
-        #else:
-#            person_detail[label_id][0] += 1
-        #if label_id == 128537 and person_detail[label_id].counter > 10:
-        #    pass
-        #elif person_detail[label_id].counter > 25:
-        #    pass
-        #else:
-        #    person_detail[label_id].set_time(datetime.now())
-                #person_detail[label_id][1] = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
             
         person_detail[label_id].increment_count()
         person_detail[label_id].set_time(datetime.now())
 
         if not person_detail[label_id].displayed:
             person_detail[label_id].send_to_display(check_auth, office, floor)
-        
-        #if person_detail[label_id].counter == 5:
-        #    auth_detail = check_auth(label_id, office, floor) + '__' + person_detail[label_id].time_keeper.strftime('%m/%d/%Y %I:%M:%S %p')
-        #    win32file.WriteFile(pipe, auth_detail.encode())
-        #for i,j in person_detail.items():
-        #    if j == 10:
-        #        win32file.WriteFile(pipe, str(i).encode())
-                
-        # if person has not been detected at all the empty out person_detail.
-        
+      
         person_detail = remove_old_items(person_detail)
         print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
         print_details(person_detail)
-        
-        #for i , j in person_detail.items():
-        #    print('{0} {1} {2}'.format(i,j[0],j[1].strftime('%m/%d/%Y %I:%M:%S %p %Z')))
         
         
         time.sleep(1)
@@ -234,14 +174,16 @@ if __name__ == '__main__':
         close_pipe(pipe)
     
     if action == 'train':
-        #pipe = create_pipe()
-        #pipe = process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4', pipe)
-        #close_pipe(pipe)        
+        # code
         print('Training Complete..')
 
-    
     if action == 'enroll':
-        #pipe = create_pipe()
-        #pipe = process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4', pipe)
-        #close_pipe(pipe)        
+        # code
         print('Enroll Complete. Please re-train..')
+        
+        
+        
+        
+        
+        
+        
