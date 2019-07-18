@@ -1,4 +1,6 @@
 import time
+import base64
+import numpy as np
 import win32pipe, win32file, pywintypes
 from datetime import timedelta, datetime  
 from dateutil import tz
@@ -6,6 +8,10 @@ import threading
 import tkinter as tk
 from tkinter import Text
 import queue as Queue
+from PIL import Image
+import cv2
+import pickle
+
 
 thread_active = True
 data_cap = []
@@ -37,7 +43,29 @@ def display_main():
         
                     while True:
                         resp = win32file.ReadFile(handle, 64*1024)
+                        #det, time1, width, height, imgg = resp[1].decode(encoding='utf-8', errors='strict').split('__')
                         det, time1 = resp[1].decode(encoding='utf-8', errors='strict').split('__')
+                        
+                        resp = win32file.ReadFile(handle, 4096*4096)
+                        
+                        imgg  = pickle.loads(resp[1])
+                        #print(imgg.mean())
+                        cv2.imshow('pic',imgg)
+                        cv2.waitKey(10)
+                        #imgg = imgg.encode()
+                        #print(imgg)
+                        #print(type(imgg))
+                        #imgg = np.fromstring(imgg, np.uint8)
+                        #print(imgg)
+                        #print(type(imgg))
+                        #imgg = cv2.imdecode(imgg,cv2.IMREAD_COLOR)
+                        #print(imgg)
+                        #print(type(imgg))
+
+                        #imgg = base64.b64decode(imgg)
+                        #print(imgg)
+                        #img = Image.frombytes('RGB',(int(width),int(height)), imgg)
+                        #img.show()
                         est = datetime.strptime(time1,'%m/%d/%Y %I:%M:%S %p')
                         est = est.replace(tzinfo=tz.gettz('America/New_York'))                
                         global data_cap

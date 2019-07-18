@@ -4,10 +4,16 @@ from __future__ import print_function
 from utils import getFileTime
 from datetime import timedelta, datetime
 from dateutil import tz
+import numpy as np
 
 import win32pipe, win32file
 import os, cv2, sys, time
 import random
+import base64
+
+import pickle
+
+from PIL import Image
 
 data_retention = 10
 
@@ -42,7 +48,7 @@ def check_auth(label_id, office, floor):
 
 class Person_Details():
     
-    minimum_hit = 3
+    minimum_hit = 2
     
     def __init__(self, label_id):
         self.id = label_id
@@ -60,8 +66,19 @@ class Person_Details():
         
     def send_to_display(self, func, office, floor):
         if self.counter == self.minimum_hit:
+            img = cv2.imread('img2.png') 
+            img = np.array(img)
+            #print(img.mean())
+            img_as_bytes = pickle.dumps(img)
+            #print(img_as_bytes)
+            #print(type(img_as_bytes))
+            #img_str = cv2.imencode('.png', img)[1].tostring()
+            #print(img_str)   
+            
+            #auth_detail = func(self.id,office,floor) + '__' + self.time_keeper_fmt + '__' + str(width) + '__' + str(height) + '__' + str1
             auth_detail = func(self.id,office,floor) + '__' + self.time_keeper_fmt
             win32file.WriteFile(pipe, auth_detail.encode())
+            win32file.WriteFile(pipe, img_as_bytes)
             self.displayed = True
             self.displayed_time = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
         
