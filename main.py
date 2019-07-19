@@ -1,6 +1,8 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+from glob import iglob
+
 from utils import getFileTime
 from datetime import timedelta, datetime
 from dateutil import tz
@@ -135,8 +137,8 @@ def remove_old_items(person_detail):
 
 def expand_bb(bb, shp, percentage=0.25):
     
-    wpadding = int(bb[3] * 0.25) # 25% increase
-    hpadding = int(bb[2] * 0.25)
+    wpadding = int(bb[3] * percentage) # 25% increase
+    hpadding = int(bb[2] * percentage)
 
     det = [0,0,0,0]
     det[0] = max(bb[0] - wpadding, 0)
@@ -180,7 +182,9 @@ def process_video_feed(filename, pipe):
             
         # send frame for face detection and recognition
         bb_box = detector.detect_faces(frame)
+        bb_box = [i for i in bb_box if i['confidence'] >= 0.9 ]
         #print(bb_box)
+            
         nrof_faces = len(bb_box)
         
         face_box = []
@@ -203,10 +207,14 @@ def process_video_feed(filename, pipe):
                 #cv2.rectangle(frame, (max(bb[0]-wpadding,0), max(bb[1]-hpadding,0)), (min(bb[0] + bb[2] + wpadding,frame.shape[1]), min(bb[1] + bb[3] + hpadding,frame.shape[0])), (0, 255, 0), 2)
                 
             
+
+
             
                 # get label of persons identified and details
             
             
+
+
             
                 label_id = random.randint(128537,128538)
                 
@@ -243,6 +251,8 @@ def process_video_feed(filename, pipe):
 
 if __name__ == '__main__':
     action = None
+    
+    
     if len(sys.argv) <= 1:
         print('Tell me what to do in argument!!!')
     else:
@@ -258,8 +268,34 @@ if __name__ == '__main__':
         print('Training Complete..')
 
     if action == 'enroll':
-        # code
-        print('Enroll Complete. Please re-train..')
+        import shutil
+        enroll_folder = 'person'    
+        final_folder = 'person_processed'
+        face_folder = 'mtcnn'
+        
+        ffolders = [name for name in os.listdir(final_folder)]
+        efolders = [name for name in os.listdir(enroll_folder) if name not in ffolders]
+        
+        if efolders:
+            from mtcnn.mtcnn import MTCNN
+            detector = MTCNN()
+            print(efolders)
+            for f in efolders:
+                for filename in iglob(os.path.join(f,'*.*'),recursive=False):
+                    im = cv2.imread(filename)
+                    box = detector.detect_faces(im)
+                    print(box)
+            
+            #for f in efolders:
+                #shutil.copytree(os.path.join(os.getcwd(),enroll_folder,f), os.path.join(os.getcwd(),final_folder,f))
+            #    shutil.move(os.path.join(enroll_folder,f), os.path.join(final_folder,f))
+            #print(ffolders)
+            #from mtcnn.mtcnn import MTCNN
+            #detector = MTCNN()
+        
+            print('Enroll Complete. Please re-train..')
+        else:
+            print('No new enrollment found..')
         
         
         
