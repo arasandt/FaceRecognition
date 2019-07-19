@@ -48,7 +48,7 @@ def check_auth(label_id, office, floor):
 
 class Person_Details():
     
-    minimum_hit = 2
+    minimum_hit = 1
     
     def __init__(self, label_id):
         self.id = label_id

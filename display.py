@@ -7,8 +7,9 @@ from dateutil import tz
 import threading
 import tkinter as tk
 from tkinter import Text
+from tkinter import *
 import queue as Queue
-from PIL import Image
+from PIL import Image, ImageTk
 import cv2
 import pickle
 
@@ -69,6 +70,8 @@ def display_main():
                         est = datetime.strptime(time1,'%m/%d/%Y %I:%M:%S %p')
                         est = est.replace(tzinfo=tz.gettz('America/New_York'))                
                         global data_cap
+                        imgg = cv2.cvtColor(imgg, cv2.COLOR_BGR2RGB)
+                        imgg = ImageTk.PhotoImage(Image.fromarray(imgg.astype('uint8'), 'RGB'))
                         data_cap.append((det,est, imgg))
                 except pywintypes.error as e:
                     if e.args[0] == 2:
@@ -84,8 +87,9 @@ def display_main():
             self.queue = Queue.Queue()
             self.qt = ThreadedTask(self.master)
             self.qt.start()
-            self.data = Text(self.master,height=30, width=100)
-            self.data.pack(side="left")
+            #self.data = Text(self.master,height=30, width=100)
+            #self.data.pack(side="left")
+            self.topbar = Frame(self.master,width=800, height=800)
         
         def counter_label(self):
             
@@ -93,12 +97,32 @@ def display_main():
                 if data_cap:
                     temp = []
                     n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
+                    c = 0
                     for i,j,k in data_cap:
                         id, msg = i.split('_')
                         msg = msg.ljust(50)
                         secs = (n - j)
                         time = j.strftime('%I:%M:%S %p')
-                        temp.append('{0}   {1}   {2} expiring in {3} secs'.format(time,id,msg, 1 + int(data_retention - secs.total_seconds())))
+                        secc = 1 + int(data_retention - secs.total_seconds())
+                        #print(k)
+                        #print(Image.fromarray(k.astype('uint8'), 'RGB'))
+                        #pho = ImageTk.PhotoImage(Image.fromarray(k.astype('uint8'), 'RGB'))
+                        #print(type(pho))
+                        temp.append('{0}   {1}   {2} expiring in {3} secs'.format(time,id,msg,secc))
+                        labelframe = Frame(self.topbar)
+                        testlabel1 = Label(labelframe,text=time, width=25)
+                        testlabel2 = Label(labelframe,text=id, width=25)
+                        testlabel3 = Label(labelframe,text=msg, width=25, wraplength=100)
+                        testlabel4 = Label(labelframe,text=secc, width=25)
+                        testlabel5 = Label(labelframe,image=k)
+                    
+                        testlabel1.grid(row=c, column=1, sticky=E)
+                        testlabel2.grid(row=c, column=2, sticky=E)
+                        testlabel3.grid(row=c, column=3, sticky=E, ipadx=10)
+                        testlabel4.grid(row=c, column=4, sticky=E)
+                        testlabel5.grid(row=c, column=0, sticky=E)
+                        c += 1
+                        labelframe.pack(fill=X)                        
                     return '\n\n'.join(temp)
                 else:
                     return ""
@@ -107,19 +131,26 @@ def display_main():
             def count():
                 global data_cap
                 self.master.title("Display Monitor - " + datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
-                self.data.delete('1.0', tk.END)
+                #self.data.delete('1.0', tk.END)
+                
+                for widget in self.topbar.winfo_children():
+                    widget.destroy()
                 data_cap = remove_old_data(data_cap)
-                self.data.insert(tk.END,disp_data(data_cap))
+                #self.data.insert(tk.END,disp_data(data_cap))
+                ret = disp_data(data_cap)
+                #print(ret)
                 if not self.qt.quit_thread:
-                    self.data.after(display_refresh, count)
+                    self.topbar.pack(fill=X)
+                    self.master.after(display_refresh, count)
                 else:
                     self.master.quit()
             count()        
         
     root = tk.Tk()
-    
+    #topbar = Frame(root)
     main_ui = GUI(root)
     main_ui.counter_label()
+    #topbar.pack(fill=X)
     root.mainloop()
     
 def remove_old_data(data):
