@@ -67,6 +67,8 @@ class Person_Details():
     def send_to_display(self, func, office, floor):
         if self.counter == self.minimum_hit:
             img = cv2.imread('img2.png') 
+            img = cv2.resize(img,(64,64))
+            #height, width, depth = img.shape
             img = np.array(img)
             #print(img.mean())
             img_as_bytes = pickle.dumps(img)

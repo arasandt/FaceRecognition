@@ -50,8 +50,8 @@ def display_main():
                         
                         imgg  = pickle.loads(resp[1])
                         #print(imgg.mean())
-                        cv2.imshow('pic',imgg)
-                        cv2.waitKey(10)
+                        #cv2.imshow('pic',imgg)
+                        #cv2.waitKey(10)
                         #imgg = imgg.encode()
                         #print(imgg)
                         #print(type(imgg))
@@ -69,7 +69,7 @@ def display_main():
                         est = datetime.strptime(time1,'%m/%d/%Y %I:%M:%S %p')
                         est = est.replace(tzinfo=tz.gettz('America/New_York'))                
                         global data_cap
-                        data_cap.append((det,est))
+                        data_cap.append((det,est, imgg))
                 except pywintypes.error as e:
                     if e.args[0] == 2:
                         time.sleep(display_refresh)
@@ -93,7 +93,7 @@ def display_main():
                 if data_cap:
                     temp = []
                     n = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
-                    for i,j in data_cap:
+                    for i,j,k in data_cap:
                         id, msg = i.split('_')
                         msg = msg.ljust(50)
                         secs = (n - j)
@@ -124,7 +124,7 @@ def display_main():
     
 def remove_old_data(data):
     now = datetime.now().replace(tzinfo=tz.gettz('America/New_York')) - timedelta(seconds=data_retention)
-    data = [(i,j) for i,j in data if j >= now ]
+    data = [(i,j,k) for i,j,k in data if j >= now ]
     return data
 
 if __name__ == '__main__':
