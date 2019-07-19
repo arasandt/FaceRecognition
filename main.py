@@ -13,6 +13,7 @@ import base64
 
 import pickle
 
+
 from PIL import Image
 
 data_retention = 10
@@ -63,13 +64,18 @@ class Person_Details():
     
     def increment_count(self):
         self.counter += 1
-        
+    
+    def assign_face(self,img, bb):
+        self.face_img = img
+        self.bb_box = bb
+
+
     def send_to_display(self, func, office, floor):
         if self.counter == self.minimum_hit:
-            img = cv2.imread('img2.png') 
-            img = cv2.resize(img,(64,64))
+            #img = cv2.imread('img2.png') 
+            img = cv2.resize(self.face_img,(64,64))
             #height, width, depth = img.shape
-            img = np.array(img)
+            #img = np.array(img)
             #print(img.mean())
             img_as_bytes = pickle.dumps(img)
             #print(img_as_bytes)
@@ -83,18 +89,22 @@ class Person_Details():
             win32file.WriteFile(pipe, img_as_bytes)
             self.displayed = True
             self.displayed_time = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
+      
         
+
 def create_pipe():
+    print('Connecting to Display..')
     pipe = win32pipe.CreateNamedPipe(r'\\.\pipe\Foo',
                                      win32pipe.PIPE_ACCESS_DUPLEX,
                                      win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
                                      1, 65536, 65536,0,None)
     win32pipe.ConnectNamedPipe(pipe, None)
-    print('Connected to Display')
+    
     return pipe
 
 def close_pipe(pipe):
     win32file.CloseHandle(pipe)
+
 
 def print_details(person_detail):
     for i,j in person_detail.items():
@@ -121,6 +131,23 @@ def remove_old_items(person_detail):
     [person_detail.pop(i) for i in remove]
     return person_detail     
         
+
+
+def expand_bb(bb, shp, percentage=0.25):
+    
+    wpadding = int(bb[3] * 0.25) # 25% increase
+    hpadding = int(bb[2] * 0.25)
+
+    det = [0,0,0,0]
+    det[0] = max(bb[0] - wpadding, 0)
+    det[1] = max(bb[1] - hpadding,0)
+    det[2] = min(bb[2] + bb[0] + wpadding,shp[1])
+    det[3] = min(bb[3] + bb[1] + hpadding,shp[0])
+    
+    return det
+
+
+
 def process_video_feed(filename, pipe):
     name_with_ext = os.path.basename(filename)
     timestamp, office, floor, camera_name, camera_id = name_with_ext.split('_')
@@ -141,6 +168,8 @@ def process_video_feed(filename, pipe):
     count = 0
     
     person_detail = {}
+    from mtcnn.mtcnn import MTCNN
+    detector = MTCNN()
     
     while True:
         (ret, frame) = video.read()
@@ -150,27 +179,59 @@ def process_video_feed(filename, pipe):
         
             
         # send frame for face detection and recognition
+        bb_box = detector.detect_faces(frame)
+        #print(bb_box)
+        nrof_faces = len(bb_box)
         
-        # get label of persons identified and details
+        face_box = []
+        cropped_image = []
         
+        if nrof_faces > 0:
+            for i in range(nrof_faces):
+                bb = bb_box[i]['box']
+                
 
-        label_id = random.randint(128537,128541)
-        
-        if person_detail.get(label_id, 0) == 0:
-            person_detail[label_id] = Person_Details(label_id)
+                det = expand_bb(bb, frame.shape, 0.25)
+                face_box.append(det)
+                
+                cropped_image.append(frame[det[1]:det[3], det[0]:det[2]].copy())
+                
+                
+                #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
+                
+                #cropped_images.append(frame[bb[1]:bb[1]+bb[3], bb[0]:bb[0]+bb[2]].copy())
+                #cv2.rectangle(frame, (max(bb[0]-wpadding,0), max(bb[1]-hpadding,0)), (min(bb[0] + bb[2] + wpadding,frame.shape[1]), min(bb[1] + bb[3] + hpadding,frame.shape[0])), (0, 255, 0), 2)
+                
             
-        person_detail[label_id].increment_count()
-        person_detail[label_id].set_time(datetime.now())
-
-        if not person_detail[label_id].displayed:
-            person_detail[label_id].send_to_display(check_auth, office, floor)
-      
-        person_detail = remove_old_items(person_detail)
-        print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
-        print_details(person_detail)
+            
+                # get label of persons identified and details
+            
+            
+            
+                label_id = random.randint(128537,128538)
+                
+                if person_detail.get(label_id, 0) == 0:
+                    person_detail[label_id] = Person_Details(label_id)
+                
+                person_detail[label_id].increment_count()
+                person_detail[label_id].assign_face(cropped_image[i], bb)
+                person_detail[label_id].set_time(datetime.now())
+    
+                if not person_detail[label_id].displayed:
+                    person_detail[label_id].send_to_display(check_auth, office, floor)
+          
+            person_detail = remove_old_items(person_detail)
+            print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
+            print_details(person_detail)
         
+        for det in face_box:
+            cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
         
-        time.sleep(1)
+        cv2.imshow('Image', frame)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            sys.exit()        
+        #time.sleep(1)
         count += 1     
         
         
