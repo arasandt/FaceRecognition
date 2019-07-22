@@ -268,35 +268,38 @@ if __name__ == '__main__':
         print('Training Complete..')
 
     if action == 'enroll':
-        import shutil
+        
         enroll_folder = 'person'    
         final_folder = 'person_processed'
-        face_folder = 'mtcnn'
-        
+
         ffolders = [name for name in os.listdir(final_folder)]
         efolders = [name for name in os.listdir(enroll_folder) if name not in ffolders]
         
         if efolders:
-            from mtcnn.mtcnn import MTCNN
-            detector = MTCNN()
-            print(efolders)
             for f in efolders:
-                for filename in iglob(os.path.join(f,'*.*'),recursive=False):
+                print('Enrolling {0}..'.format(f))
+                for filename in iglob(os.path.join(enroll_folder, f,'*.jpg'),recursive=False):
+                    #print(filename)
                     im = cv2.imread(filename)
+                    
+                    from mtcnn.mtcnn import MTCNN
+                    detector = MTCNN()                    
+                    
                     box = detector.detect_faces(im)
-                    print(box)
-            
-            #for f in efolders:
-                #shutil.copytree(os.path.join(os.getcwd(),enroll_folder,f), os.path.join(os.getcwd(),final_folder,f))
-            #    shutil.move(os.path.join(enroll_folder,f), os.path.join(final_folder,f))
-            #print(ffolders)
-            #from mtcnn.mtcnn import MTCNN
-            #detector = MTCNN()
+                    box = [i for i in box if i['confidence'] >= 0.9 ]
+                    bb = box[0]['box']
+                    det = expand_bb(bb, [9999,9999], 0)
+                    cv2.imwrite(filename + '_mtcnn',im[det[1]:det[3], det[0]:det[2]].copy())
+                    
         
-            print('Enroll Complete. Please re-train..')
+            for f in efolders:
+                import shutil
+                shutil.move(os.path.join(enroll_folder,f), os.path.join(final_folder,f))
+        
+            print('Enrollment Complete. Please re-train..')
         else:
             print('No new enrollment found..')
-        
+                
         
         
         
