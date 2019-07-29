@@ -39,7 +39,7 @@ def check_auth(label_id, office, floor):
                 if authorized[label_id][2] == floor:
                     ret_msg = msg[0]
                 else:
-                    ret_msg = msg[3] + office + '#' + floor
+                    ret_msg = msg[3] + office + ' # ' + floor
             else:
                 ret_msg = msg[2] + office
         else:
