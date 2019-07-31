@@ -1,8 +1,19 @@
 from __future__ import absolute_import
+
 from __future__ import print_function
 
-from glob import iglob
 
+import cognitive_face as CF
+KEY = 'ce7bf170a154482ba9ef08a557467576'  # Replace with a valid Subscription Key here.
+CF.Key.set(KEY)
+BASE_URL = 'https://metfaceapi.cognitiveservices.azure.com/face/v1.0/'  # Replace with your regional Base URL
+CF.BaseUrl.set(BASE_URL)
+person_group_id =   'employee'
+
+
+
+from glob import iglob
+import operator
 from utils import getFileTime
 from datetime import timedelta, datetime
 from dateutil import tz
@@ -195,29 +206,50 @@ def process_video_feed(filename, pipe):
             for i in range(nrof_faces):
                 bb = bb_box[i]['box']
                 
-                det = expand_bb(bb, frame.shape, percentage=0)
+                #det = expand_bb(bb, frame.shape, percentage=0)
                 
-                orig_image = frame[det[1]:det[3], det[0]:det[2]].copy()
+                #orig_image = frame[det[1]:det[3], det[0]:det[2]].copy()
 
                 #det = expand_bb(bb, frame.shape, percentage=0.25)
-                det = expand_bb(bb, frame.shape, percentage=0)
+                det = expand_bb(bb, frame.shape, percentage=0.25)
                 
-                face_box.append(det)
+                
                 
                 cropped_image.append(frame[det[1]:det[3], det[0]:det[2]].copy())
+                file = 'temp.jpg'
+                cv2.imwrite(file,cropped_image[-1])
+
+                personIds = CF.person.lists(person_group_id)
+                personId = {person['personId']: person["name"] for person in personIds}                
+
+                res = CF.face.detect(file)
+                print(res)
+                face_ids = [d['faceId'] for d in res]
                 
-                
+                res = CF.face.identify(face_ids,person_group_id)    
+                print(res)
+                candidates = {i['personId']:i['confidence'] for i in res[0]['candidates']}
+                #print(candidates)
+                if candidates:
+                    max_candidates = max(candidates.items(), key=operator.itemgetter(1))[0]
+                    print(personId[max_candidates], candidates[max_candidates])
+                    if candidates[max_candidates] > 0.50 :
+                        label_id = personId[max_candidates]                  
+                    else:
+                        label_id = None
+                else:
+                    label_id = None
                 #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
-                
+                face_box.append((det,label_id))
                 #cropped_images.append(frame[bb[1]:bb[1]+bb`[3], bb[0]:bb[0]+bb[2]].copy())
                 #cv2.rectangle(frame, (max(bb[0]-wpadding,0), max(bb[1]-hpadding,0)), (min(bb[0] + bb[2] + wpadding,frame.shape[1]), min(bb[1] + bb[3] + hpadding,frame.shape[0])), (0, 255, 0), 2)
                 
                 #print(orig_image.shape)
-                orig_image = cv2.resize(orig_image,(160,160))
+                #orig_image = cv2.resize(orig_image,(160,160))
                 #print(orig_image.shape)
                 #cv2.imshow('person',orig_image)
-                cv2.imwrite(str(count) + str(i) + '.jpg', orig_image)
-                label_id = recognize_face(orig_image, i)
+                #cv2.imwrite(str(count) + str(i) + '.jpg', orig_image)
+                #label_id = recognize_face(orig_image, i)
                 # get label of persons identified and details
                 
                 #time.sleep(10)
@@ -234,17 +266,18 @@ def process_video_feed(filename, pipe):
                     person_detail[label_id].set_time(datetime.now())
         
                     if not person_detail[label_id].displayed:
-                        person_detail[label_id].send_to_display(check_auth, office, floor)
+                        pass
+                        #person_detail[label_id].send_to_display(check_auth, office, floor)
                 
             person_detail = remove_old_items(person_detail)
             print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
             print_details(person_detail)
         
-        for i, det in enumerate(face_box):
+        for det, lab in face_box:
             cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
-            #text_x = det[0]
-            #text_y = det[3] + 20            
-            #cv2.putText(frame, str(i), (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 255), thickness=1, lineType=2)            
+            text_x = det[0]
+            text_y = det[3] + 20            
+            cv2.putText(frame, lab, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 255), thickness=1, lineType=2)            
         
         cv2.imshow('Image', frame)
         
@@ -262,8 +295,7 @@ def process_video_feed(filename, pipe):
 
 if __name__ == '__main__':
     action = None
-    
-    
+
     if len(sys.argv) <= 1:
         print('Tell me what to do in argument!!!')
     else:
@@ -274,61 +306,57 @@ if __name__ == '__main__':
         #pipe = None
         pipe = process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4', pipe)
         close_pipe(pipe)
+
     
-    if action == 'train':
-        
-        from classpkg.classifier import training
-        
-        datadir = './person_processed'
-        modeldir = './model/FaceNet_20180408-102900.pb'
-        classifier_filename = './model/SVCRBFclassifier.pkl'
-        
-        print ("Training Start")
-        
-        obj=training(datadir,modeldir,classifier_filename)
-        
-        get_file=obj.main_train() # # create new classifier after training with the input images
-        
-        print('Saved classifier model to file {0}'.format(get_file))
-        
-        # code
-        print('Training Complete..')
+    if action == 'delete':
+        r = CF.person_group.lists()
+        if person_group_id in [i['personGroupId'] for i in r]:
+            CF.person_group.delete(person_group_id)
+            print('{0} person group deleted'.format(person_group_id))    
+            
+    
+    if action == 'list':
+        personIds = CF.person.lists(person_group_id)
+        personId = {person["name"] for person in personIds}
+        print(person_group_id , personId)
+            
 
     if action == 'enroll':
-        
-        enroll_folder = 'person'    
-        final_folder = 'person_processed'
 
-        ffolders = [name for name in os.listdir(final_folder)]
-        efolders = [name for name in os.listdir(enroll_folder) if name not in ffolders]
+        final_folder = 'person_processed'
         
-        if efolders:
-            for f in efolders:
-                print('Enrolling {0}..'.format(f))
-                for filename in iglob(os.path.join(enroll_folder, f,'*.jpg'),recursive=False):
-                    #print(filename)
-                    im = cv2.imread(filename)
-                    
-                    from mtcnn.mtcnn import MTCNN
-                    detector = MTCNN()                    
-                    
-                    box = detector.detect_faces(im)
-                    box = [i for i in box if i['confidence'] >= 0.9 ]
-                    if box:
-                        bb = box[0]['box']
-                        det = expand_bb(bb, [9999,9999], 0)
-                        ex_img = im[det[1]:det[3], det[0]:det[2]].copy()
-                        ex_img = cv2.resize(ex_img, (160,160),interpolation=cv2.INTER_CUBIC)
-                        cv2.imwrite(filename + '_mtcnn',ex_img)
-                    
+        r = CF.person_group.lists()
         
-            for f in efolders:
-                import shutil
-                shutil.move(os.path.join(enroll_folder,f), os.path.join(final_folder,f))
-        
-            print('Enrollment Complete. Please re-train..')
+        if person_group_id in [i['personGroupId'] for i in r]:
+            print('{0} person group already exists..'.format(person_group_id))
         else:
-            print('No new enrollment found..')
+            CF.person_group.create(person_group_id)    
+            print('{0} person group created..'.format(person_group_id))
+            
+        efolders = [name for name in os.listdir(final_folder)]
+        
+        personIds = CF.person.lists(person_group_id)
+        personId = [(person["name"], person['personId']) for person in personIds]
+        personname = {person["name"] for person in personIds}
+        
+        for f in efolders:
+            
+            if f in personname:
+                print('{0} already enrolled..'.format(f))
+                continue
+            else:
+                pass
+                
+            print('Enrolling {0}..'.format(f))
+                #for i, j in personId:
+            #    if i == f:
+            #        CF.person.delete(person_group_id,j)
+            for filename in iglob(os.path.join(final_folder, f,'*.jpg'),recursive=False):
+                res = CF.person.create(person_group_id, f)
+                person_id = res['personId']
+                CF.person.add_face(filename, person_group_id, person_id)
+        
+        CF.person_group.train(person_group_id)        
                 
         
         

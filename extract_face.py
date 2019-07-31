@@ -1,4 +1,5 @@
 import tensorflow as tf
+import cv2
 import classpkg.facenet as facenet
 #import classpkg.detect_face as detect_face
 import os
@@ -51,15 +52,24 @@ def recognize_face(frame, i):
             feed_dict = {images_placeholder: frame_reshape, phase_train_placeholder: False}
             emb_array[0, :] = sess.run(embeddings, feed_dict=feed_dict)
             predictions = model.predict_proba(emb_array)
-            print(predictions)
+            #print(predictions)
             best_class_indices = np.argmax(predictions, axis=1)            
             best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
-            print(best_class_indices,' with accuracy ',best_class_probabilities, 'for ', str(i))
-            
+            #print(best_class_indices,' with accuracy ',best_class_probabilities, 'for ', str(i))
+            best_class_probabilities
             #best_class_indices = [i for i in best_class_indices if i >= 0.80]
             if best_class_indices:
-                print(class_names[best_class_indices[0]])
-                return class_names[best_class_indices[0]]
+                if best_class_probabilities[0] > 0.75:
+                    print(class_names[best_class_indices[0]])
+                    return class_names[best_class_indices[0]]
             else:
                 return None
+            
+            
+
+if __name__ == '__main__':
+    img = cv2.imread('61.jpg')
+    x = recognize_face(img,0)
+    print(x)
+    
             
