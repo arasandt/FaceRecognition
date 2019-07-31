@@ -85,7 +85,7 @@ class Network(object):
         data_dict = np.load(data_path, encoding='latin1').item() #pylint: disable=no-member
 
         for op_name in data_dict:
-            with tf.variable_scope(op_name, reuse=True):
+            with tf.compat.v1.variable_scope(op_name, reuse=True):
                 for param_name, data in iteritems(data_dict[op_name]):
                     try:
                         var = tf.get_variable(param_name)
@@ -150,7 +150,7 @@ class Network(object):
         assert c_o % group == 0
         # Convolution for a given input and kernel
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
-        with tf.variable_scope(name) as scope:
+        with tf.compat.v1.variable_scope(name) as scope:
             kernel = self.make_var('weights', shape=[k_h, k_w, c_i // group, c_o])
             # This is the common-case. Convolve the input without any further complications.
             output = convolve(inp, kernel)
@@ -165,7 +165,7 @@ class Network(object):
 
     @layer
     def prelu(self, inp, name):
-        with tf.variable_scope(name):
+        with tf.compat.v1.variable_scopee(name):
             i = int(inp.get_shape()[-1])
             alpha = self.make_var('alpha', shape=(i,))
             output = tf.nn.relu(inp) + tf.multiply(alpha, -tf.nn.relu(-inp))
@@ -182,7 +182,7 @@ class Network(object):
 
     @layer
     def fc(self, inp, num_out, name, relu=True):
-        with tf.variable_scope(name):
+        with tf.compat.v1.variable_scope(name):
             input_shape = inp.get_shape()
             if input_shape.ndims == 4:
                 # The input is spatial. Vectorize it first.
@@ -277,15 +277,16 @@ def create_mtcnn(sess, model_path):
     if not model_path: # all det1, 2 , 3 file are pretained weights for mtcnn for face detection
         model_path,_ = os.path.split(os.path.realpath(__file__)) # __file__ gives the path. and real path gets the actual referenceable entire path. returns only directory into model_path
 
-    with tf.variable_scope('pnet'):
-        data = tf.placeholder(tf.float32, (None,None,None,3), 'input') # create placeholder for index, width, height and channel
+    with tf.compat.v1.variable_scope('pnet'):
+        #data = tf.placeholder(tf.float32, (None,None,None,3), 'input') # create placeholder for index, width, height and channel
+        data = tf.compat.v1.placeholder(tf.float32, (None,None,None,3), 'input') # create placeholder for index, width, height and channel
         pnet = PNet({'data':data})
         pnet.load(os.path.join(model_path, 'det1.npy'), sess)
-    with tf.variable_scope('rnet'):
+    with tf.compat.v1.variable_scope('rnet'):
         data = tf.placeholder(tf.float32, (None,24,24,3), 'input')
         rnet = RNet({'data':data})
         rnet.load(os.path.join(model_path, 'det2.npy'), sess)
-    with tf.variable_scope('onet'):
+    with tf.compat.v1.variable_scope('onet'):
         data = tf.placeholder(tf.float32, (None,48,48,3), 'input')
         onet = ONet({'data':data})
         onet.load(os.path.join(model_path, 'det3.npy'), sess)

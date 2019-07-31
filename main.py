@@ -264,6 +264,21 @@ if __name__ == '__main__':
         close_pipe(pipe)
     
     if action == 'train':
+        
+        from classpkg.classifier import training
+        
+        datadir = './person_processed'
+        modeldir = './model/FaceNet_20180408-102900.pb'
+        classifier_filename = './model/SVCRBFclassifier.pkl'
+        
+        print ("Training Start")
+        
+        obj=training(datadir,modeldir,classifier_filename)
+        
+        get_file=obj.main_train() # # create new classifier after training with the input images
+        
+        print('Saved classifier model to file {0}'.format(get_file))
+        
         # code
         print('Training Complete..')
 

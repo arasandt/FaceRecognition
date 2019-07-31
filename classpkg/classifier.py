@@ -48,6 +48,7 @@ class training:
                 nrof_images = len(path) # all images of all the labels
                 nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / batch_size))  # the more the batch_size the less the epoch would be
                 emb_array = np.zeros((nrof_images, embedding_size)) # a 2-d array with image and its 512-d vector
+                
                 for i in range(nrof_batches_per_epoch): # for 200 images, this image will run only once
                     start_index = i * batch_size #  for 200 images, it will be 0
                     end_index = min((i + 1) * batch_size, nrof_images) #  for 200 images, it will be 200
