@@ -324,6 +324,7 @@ def get_dataset(path, has_class_directories=True):
     for i in range(nrof_classes):
         class_name = classes[i]
         facedir = os.path.join(path_exp, class_name)
+        print('Processing {0}'.format(class_name))
         image_paths = get_image_paths(facedir)
         dataset.append(ImageClass(class_name, image_paths))
   
@@ -333,7 +334,9 @@ def get_image_paths(facedir):
     image_paths = []
     if os.path.isdir(facedir):
         images = os.listdir(facedir)
-        image_paths = [os.path.join(facedir,img) for img in images]
+        #image_paths = [os.path.join(facedir,img) for img in images]
+        image_paths = [os.path.join(facedir,img) for img in images if '_mtcnn' in img]
+        #print(image_paths)
     return image_paths
   
 def split_dataset(dataset, split_ratio, min_nrof_images_per_class, mode):
