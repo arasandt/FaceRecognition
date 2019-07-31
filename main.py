@@ -13,6 +13,8 @@ import os, cv2, sys, time
 import random
 import base64
 
+from extract_face import recognize_face
+
 import pickle
 
 
@@ -149,7 +151,6 @@ def expand_bb(bb, shp, percentage=0.25):
     return det
 
 
-
 def process_video_feed(filename, pipe):
     name_with_ext = os.path.basename(filename)
     timestamp, office, floor, camera_name, camera_id = name_with_ext.split('_')
@@ -194,8 +195,13 @@ def process_video_feed(filename, pipe):
             for i in range(nrof_faces):
                 bb = bb_box[i]['box']
                 
+                det = expand_bb(bb, frame.shape, percentage=0)
+                
+                orig_image = frame[det[1]:det[3], det[0]:det[2]].copy()
 
-                det = expand_bb(bb, frame.shape, 0.25)
+                #det = expand_bb(bb, frame.shape, percentage=0.25)
+                det = expand_bb(bb, frame.shape, percentage=0)
+                
                 face_box.append(det)
                 
                 cropped_image.append(frame[det[1]:det[3], det[0]:det[2]].copy())
@@ -203,37 +209,40 @@ def process_video_feed(filename, pipe):
                 
                 #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
                 
-                #cropped_images.append(frame[bb[1]:bb[1]+bb[3], bb[0]:bb[0]+bb[2]].copy())
+                #cropped_images.append(frame[bb[1]:bb[1]+bb`[3], bb[0]:bb[0]+bb[2]].copy())
                 #cv2.rectangle(frame, (max(bb[0]-wpadding,0), max(bb[1]-hpadding,0)), (min(bb[0] + bb[2] + wpadding,frame.shape[1]), min(bb[1] + bb[3] + hpadding,frame.shape[0])), (0, 255, 0), 2)
                 
-            
-
-
-            
+                #print(orig_image.shape)
+                orig_image = cv2.resize(orig_image,(160,160))
+                #print(orig_image.shape)
+                label_id = recognize_face(orig_image, i)
                 # get label of persons identified and details
-            
+                
+                #time.sleep(10)
             
 
-
             
-                label_id = random.randint(128537,128538)
-                
-                if person_detail.get(label_id, 0) == 0:
-                    person_detail[label_id] = Person_Details(label_id)
-                
-                person_detail[label_id].increment_count()
-                person_detail[label_id].assign_face(cropped_image[i], bb)
-                person_detail[label_id].set_time(datetime.now())
-    
-                if not person_detail[label_id].displayed:
-                    person_detail[label_id].send_to_display(check_auth, office, floor)
+                #######label_id = random.randint(128537,128538)
+                if label_id is not None:
+                    if person_detail.get(label_id, 0) == 0:
+                        person_detail[label_id] = Person_Details(label_id)
+                    
+                    person_detail[label_id].increment_count()
+                    person_detail[label_id].assign_face(cropped_image[i], bb)
+                    person_detail[label_id].set_time(datetime.now())
+        
+                    if not person_detail[label_id].displayed:
+                        person_detail[label_id].send_to_display(check_auth, office, floor)
           
             person_detail = remove_old_items(person_detail)
             print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
             print_details(person_detail)
         
-        for det in face_box:
+        for i, det in enumerate(face_box):
             cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
+            text_x = det[0]
+            text_y = det[3] + 20            
+            cv2.putText(frame, str(i), (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 255), thickness=1, lineType=2)            
         
         cv2.imshow('Image', frame)
         
@@ -302,9 +311,12 @@ if __name__ == '__main__':
                     
                     box = detector.detect_faces(im)
                     box = [i for i in box if i['confidence'] >= 0.9 ]
-                    bb = box[0]['box']
-                    det = expand_bb(bb, [9999,9999], 0)
-                    cv2.imwrite(filename + '_mtcnn',im[det[1]:det[3], det[0]:det[2]].copy())
+                    if box:
+                        bb = box[0]['box']
+                        det = expand_bb(bb, [9999,9999], 0)
+                        ex_img = im[det[1]:det[3], det[0]:det[2]].copy()
+                        ex_img = cv2.resize(ex_img, (160,160),interpolation=cv2.INTER_CUBIC)
+                        cv2.imwrite(filename + '_mtcnn',ex_img)
                     
         
             for f in efolders:
