@@ -1,3 +1,5 @@
 streaming/
 *.pyc
 *.cmd
+*.MOV
+*.MP4

@@ -85,37 +85,11 @@ class Person_Details():
         self.bb_box = bb
 
 
-    def send_to_display(self, func, office, floor):
-        if self.counter == self.minimum_hit:
-            #img = cv2.imread('img2.png') 
-            img = cv2.resize(self.face_img,(64,64))
-            #height, width, depth = img.shape
-            #img = np.array(img)
-            #print(img.mean())
-            img_as_bytes = pickle.dumps(img)
-            #print(img_as_bytes)
-            #print(type(img_as_bytes))
-            #img_str = cv2.imencode('.png', img)[1].tostring()
-            #print(img_str)   
-            
-            #auth_detail = func(self.id,office,floor) + '__' + self.time_keeper_fmt + '__' + str(width) + '__' + str(height) + '__' + str1
-            auth_detail = func(self.id,office,floor) + '__' + self.time_keeper_fmt
-            win32file.WriteFile(pipe, auth_detail.encode())
-            win32file.WriteFile(pipe, img_as_bytes)
-            self.displayed = True
-            self.displayed_time = datetime.now().replace(tzinfo=tz.gettz('America/New_York'))
       
         
 
-def create_pipe():
-    print('Connecting to Display..')
-    pipe = win32pipe.CreateNamedPipe(r'\\.\pipe\Foo',
-                                     win32pipe.PIPE_ACCESS_DUPLEX,
-                                     win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
-                                     1, 65536, 65536,0,None)
-    win32pipe.ConnectNamedPipe(pipe, None)
     
-    return pipe
+
 
 def close_pipe(pipe):
     win32file.CloseHandle(pipe)
@@ -162,7 +136,7 @@ def expand_bb(bb, shp, percentage=0.25):
     return det
 
 
-def process_video_feed(filename, pipe):
+def process_video_feed(filename):
     name_with_ext = os.path.basename(filename)
     timestamp, office, floor, camera_name, camera_id = name_with_ext.split('_')
     timestamp = getFileTime(timestamp)
@@ -214,7 +188,6 @@ def process_video_feed(filename, pipe):
                 det = expand_bb(bb, frame.shape, percentage=0.25)
                 
                 
-                
                 cropped_image.append(frame[det[1]:det[3], det[0]:det[2]].copy())
                 file = 'temp.jpg'
                 cv2.imwrite(file,cropped_image[-1])
@@ -257,28 +230,34 @@ def process_video_feed(filename, pipe):
 
             
                 #######label_id = random.randint(128537,128538)
-                if label_id is not None:
-                    if person_detail.get(label_id, 0) == 0:
-                        person_detail[label_id] = Person_Details(label_id)
-                    
-                    person_detail[label_id].increment_count()
-                    person_detail[label_id].assign_face(cropped_image[i], bb)
-                    person_detail[label_id].set_time(datetime.now())
-        
-                    if not person_detail[label_id].displayed:
-                        pass
-                        #person_detail[label_id].send_to_display(check_auth, office, floor)
-                
-            person_detail = remove_old_items(person_detail)
-            print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
-            print_details(person_detail)
+#                if label_id is not None:
+#                    if person_detail.get(label_id, 0) == 0:
+#                        person_detail[label_id] = Person_Details(label_id)
+#                    
+#                    person_detail[label_id].increment_count()
+#                    person_detail[label_id].assign_face(cropped_image[i], bb)
+#                    person_detail[label_id].set_time(datetime.now())
+#        
+#                    if not person_detail[label_id].displayed:
+#                        pass
+#                        #person_detail[label_id].send_to_display(check_auth, office, floor)
+#                
+#            person_detail = remove_old_items(person_detail)
+#            print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
+#            print_details(person_detail)
         
         for det, lab in face_box:
-            cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
-            text_x = det[0]
-            text_y = det[3] + 20            
-            cv2.putText(frame, lab, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 255), thickness=1, lineType=2)            
-        
+            if lab is None:
+                color = (0, 0, 255)
+            else:                
+                color = (0, 255,0)
+                text_x = det[0]
+                text_y = det[3] + 20            
+                #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
+                cv2.putText(frame, lab, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (255, 255, 255), thickness=1, lineType=2)            
+
+            cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
+            
         cv2.imshow('Image', frame)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -291,7 +270,7 @@ def process_video_feed(filename, pipe):
         
         
     video.release()
-    return pipe
+
 
 if __name__ == '__main__':
     action = None
@@ -302,10 +281,10 @@ if __name__ == '__main__':
         action = sys.argv[1]
     
     if action == 'run':
-        pipe = create_pipe()
+        #pipe = create_pipe()
         #pipe = None
-        pipe = process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4', pipe)
-        close_pipe(pipe)
+        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4')
+        #close_pipe(pipe)
 
     
     if action == 'delete':
