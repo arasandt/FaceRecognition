@@ -164,8 +164,19 @@ def process_video_feed(filename):
         
         if not ret:
             break
-        
-            
+
+#        (h, w) = frame.shape[:2]
+#        center = (w / 2, h / 2)
+#         
+#        angle = 270
+#        scale = 1.0
+#         
+#        # Perform the counter clockwise rotation holding at the center
+#        # 90 degrees
+#        M = cv2.getRotationMatrix2D(center, angle, scale)
+#        frame = cv2.warpAffine(frame, M, (h, w))        
+        frame=cv2.transpose(frame)
+        frame=cv2.flip(frame,flipCode=1)    
         # send frame for face detection and recognition
         bb_box = detector.detect_faces(frame)
         bb_box = [i for i in bb_box if i['confidence'] >= 0.9 ]
@@ -185,7 +196,7 @@ def process_video_feed(filename):
                 #orig_image = frame[det[1]:det[3], det[0]:det[2]].copy()
 
                 #det = expand_bb(bb, frame.shape, percentage=0.25)
-                det = expand_bb(bb, frame.shape, percentage=0.25)
+                det = expand_bb(bb, frame.shape, percentage=0.50)
                 
                 
                 cropped_image.append(frame[det[1]:det[3], det[0]:det[2]].copy())
@@ -196,24 +207,25 @@ def process_video_feed(filename):
                 personId = {person['personId']: person["name"] for person in personIds}                
 
                 res = CF.face.detect(file)
-                print(res)
+                #print(res)
                 face_ids = [d['faceId'] for d in res]
                 
-                res = CF.face.identify(face_ids,person_group_id)    
-                print(res)
-                candidates = {i['personId']:i['confidence'] for i in res[0]['candidates']}
-                #print(candidates)
-                if candidates:
-                    max_candidates = max(candidates.items(), key=operator.itemgetter(1))[0]
-                    print(personId[max_candidates], candidates[max_candidates])
-                    if candidates[max_candidates] > 0.50 :
-                        label_id = personId[max_candidates]                  
+                if face_ids:
+                    res = CF.face.identify(face_ids,person_group_id)    
+                    #print(res)
+                    candidates = {i['personId']:i['confidence'] for i in res[0]['candidates']}
+                    #print(candidates)
+                    if candidates:
+                        max_candidates = max(candidates.items(), key=operator.itemgetter(1))[0]
+                        #print(personId[max_candidates], candidates[max_candidates])
+                        if candidates[max_candidates] > 0.50 :
+                            label_id = personId[max_candidates]                  
+                        else:
+                            label_id = None
                     else:
                         label_id = None
-                else:
-                    label_id = None
-                #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
-                face_box.append((det,label_id))
+                    #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
+                    face_box.append((det,label_id))
                 #cropped_images.append(frame[bb[1]:bb[1]+bb`[3], bb[0]:bb[0]+bb[2]].copy())
                 #cv2.rectangle(frame, (max(bb[0]-wpadding,0), max(bb[1]-hpadding,0)), (min(bb[0] + bb[2] + wpadding,frame.shape[1]), min(bb[1] + bb[3] + hpadding,frame.shape[0])), (0, 255, 0), 2)
                 
@@ -283,7 +295,7 @@ if __name__ == '__main__':
     if action == 'run':
         #pipe = create_pipe()
         #pipe = None
-        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12345.mp4')
+        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12346.MOV')
         #close_pipe(pipe)
 
     
