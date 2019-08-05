@@ -159,12 +159,22 @@ def process_video_feed(filename):
     from mtcnn.mtcnn import MTCNN
     detector = MTCNN()
     
+    length = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = int(video.get(cv2.CAP_PROP_FPS))
+    frame_width = int(video.get(3))
+    frame_height = int(video.get(4))
+    
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    vout = cv2.VideoWriter(filename + '.output.avi', fourcc, fps, (frame_width,frame_height))
+
+    
     while True:
         (ret, frame) = video.read()
         
         if not ret:
             break
-
+        
+        print('{0}_{1}'.format(count,length))
 #        (h, w) = frame.shape[:2]
 #        center = (w / 2, h / 2)
 #         
@@ -173,10 +183,8 @@ def process_video_feed(filename):
 #         
 #        # Perform the counter clockwise rotation holding at the center
 #        # 90 degrees
-#        M = cv2.getRotationMatrix2D(center, angle, scale)
-#        frame = cv2.warpAffine(frame, M, (h, w))        
-        frame=cv2.transpose(frame)
-        frame=cv2.flip(frame,flipCode=1)    
+        #frame=cv2.transpose(frame)
+        #frame=cv2.flip(frame,flipCode=1)    
         # send frame for face detection and recognition
         bb_box = detector.detect_faces(frame)
         bb_box = [i for i in bb_box if i['confidence'] >= 0.9 ]
@@ -219,7 +227,7 @@ def process_video_feed(filename):
                         max_candidates = max(candidates.items(), key=operator.itemgetter(1))[0]
                         #print(personId[max_candidates], candidates[max_candidates])
                         if candidates[max_candidates] > 0.50 :
-                            label_id = personId[max_candidates]                  
+                            label_id = str(personId[max_candidates]) + ' ' + str(candidates[max_candidates])                 
                         else:
                             label_id = None
                     else:
@@ -270,17 +278,24 @@ def process_video_feed(filename):
 
             cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
             
-        cv2.imshow('Image', frame)
-        
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            sys.exit()        
+        #cv2.imshow('Image', frame)
+        height, width, depth = frame.shape
+        W = 300
+        imgScale = W/width
+        newX,newY = frame.shape[1]*imgScale, frame.shape[0]*imgScale
+        newimg = cv2.resize(frame,(int(newX),int(newY)))
+        #cv2.imshow("Show by CV2",newimg)
+        vout.write(frame)
+                
+#        if cv2.waitKey(1) & 0xFF == ord('q'):
+#            sys.exit()        
         #time.sleep(1)
         count += 1     
         
         
         
         
-        
+    vout.release()        
     video.release()
 
 
@@ -295,7 +310,7 @@ if __name__ == '__main__':
     if action == 'run':
         #pipe = create_pipe()
         #pipe = None
-        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12346.MOV')
+        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12347.mp4')
         #close_pipe(pipe)
 
     
