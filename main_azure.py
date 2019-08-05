@@ -18,6 +18,7 @@ from utils import getFileTime
 from datetime import timedelta, datetime
 from dateutil import tz
 import numpy as np
+import collections 
 
 import win32pipe, win32file
 import os, cv2, sys, time
@@ -28,10 +29,13 @@ from extract_face import recognize_face
 
 import pickle
 
+person_detail = {}
 
 from PIL import Image
 
-data_retention = 10
+hits_window_size = 50 # (fps * 2 secs)
+hits_required =  hits_window_size * 0.20 #(20% of window size should have good hits)
+cool_time = timedelta(seconds=20)
 
 def check_auth(label_id, office, floor):
     label_id = str(label_id)
@@ -64,14 +68,16 @@ def check_auth(label_id, office, floor):
 
 class Person_Details():
     
-    minimum_hit = 1
+    
     
     def __init__(self, label_id):
         self.id = label_id
         self.time_keeper = None
         self.counter = 0
-        self.displayed = False
-        self.displayed_time = None
+        self.window = collections.deque([], hits_window_size)
+        self.cool_off_time = None
+        #self.displayed = False
+        #self.displayed_time = None
     
     def set_time(self, time_k):
         self.time_keeper = time_k.replace(tzinfo=tz.gettz('America/New_York'))
@@ -84,6 +90,19 @@ class Person_Details():
         self.face_img = img
         self.bb_box = bb
 
+    def add_label(self, label_id):
+        print('In Label')
+        if self.cool_off_time is None or self.time_keeper > self.cool_off_time:
+            self.window.append((self.id, label_id))
+            if label_id is not None:
+                print('Incrementing Count')
+                self.increment_count()
+            
+    def reset(self):
+        self.counter = 0
+        self.window = None
+        self.window = collections.deque([], hits_window_size)
+        self.cool_off_time = self.time_keeper + cool_time
 
       
         
@@ -175,6 +194,11 @@ def process_video_feed(filename):
             break
         
         print('{0}_{1}'.format(count,length))
+        
+        if count < 36:
+            count += 1
+            continue
+            
 #        (h, w) = frame.shape[:2]
 #        center = (w / 2, h / 2)
 #         
@@ -217,6 +241,8 @@ def process_video_feed(filename):
                 res = CF.face.detect(file)
                 #print(res)
                 face_ids = [d['faceId'] for d in res]
+                label_id = None
+                confidence = 0.0
                 
                 if face_ids:
                     res = CF.face.identify(face_ids,person_group_id)    
@@ -227,13 +253,10 @@ def process_video_feed(filename):
                         max_candidates = max(candidates.items(), key=operator.itemgetter(1))[0]
                         #print(personId[max_candidates], candidates[max_candidates])
                         if candidates[max_candidates] > 0.50 :
-                            label_id = str(personId[max_candidates]) + ' ' + str(candidates[max_candidates])                 
-                        else:
-                            label_id = None
-                    else:
-                        label_id = None
+                            label_id = personId[max_candidates]
+                            confidence = candidates[max_candidates]
                     #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), (0, 255, 0), 2)
-                    face_box.append((det,label_id))
+                    face_box.append((det,label_id, confidence))
                 #cropped_images.append(frame[bb[1]:bb[1]+bb`[3], bb[0]:bb[0]+bb[2]].copy())
                 #cv2.rectangle(frame, (max(bb[0]-wpadding,0), max(bb[1]-hpadding,0)), (min(bb[0] + bb[2] + wpadding,frame.shape[1]), min(bb[1] + bb[3] + hpadding,frame.shape[0])), (0, 255, 0), 2)
                 
@@ -247,17 +270,17 @@ def process_video_feed(filename):
                 
                 #time.sleep(10)
             
-
+                
             
                 #######label_id = random.randint(128537,128538)
-#                if label_id is not None:
-#                    if person_detail.get(label_id, 0) == 0:
-#                        person_detail[label_id] = Person_Details(label_id)
-#                    
-#                    person_detail[label_id].increment_count()
-#                    person_detail[label_id].assign_face(cropped_image[i], bb)
-#                    person_detail[label_id].set_time(datetime.now())
-#        
+                if label_id is not None:
+                    if person_detail.get(label_id, 0) == 0:
+                        person_detail[label_id] = Person_Details(label_id)
+                    
+                    #person_detail[label_id].increment_count()
+                    person_detail[label_id].assign_face(cropped_image[i], bb)
+                    person_detail[label_id].set_time(datetime.now())
+#           
 #                    if not person_detail[label_id].displayed:
 #                        pass
 #                        #person_detail[label_id].send_to_display(check_auth, office, floor)
@@ -266,7 +289,29 @@ def process_video_feed(filename):
 #            print('*******************',datetime.now().strftime('%m/%d/%Y %I:%M:%S %p %Z'))
 #            print_details(person_detail)
         
-        for det, lab in face_box:
+        
+        for person in person_detail.keys():
+            if person in face_box:
+                person_detail[person].add_label(person)
+            else:
+                person_detail[person].add_label(None)
+        
+        print('********************')        
+        # did anybody reach hits required
+        for person in person_detail.keys():
+            print('{0},{1}'.format(person, person_detail[person].counter))
+            if person_detail[person].counter == hits_required:
+                print(person)
+                person_detail[person].reset()
+                
+        print('********************')        
+                
+                
+                
+                
+                
+        for det, lab, confi in face_box:
+                
             if lab is None:
                 color = (0, 0, 255)
             else:                
@@ -274,16 +319,21 @@ def process_video_feed(filename):
                 text_x = det[0]
                 text_y = det[3] + 20            
                 #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
-                cv2.putText(frame, lab, (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (255, 255, 255), thickness=1, lineType=2)            
+                cv2.putText(frame, str(lab) + ' ' + str(round(confi,2)) , (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (255, 255, 255), thickness=1, lineType=2)            
 
             cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
             
         #cv2.imshow('Image', frame)
-        height, width, depth = frame.shape
-        W = 300
-        imgScale = W/width
-        newX,newY = frame.shape[1]*imgScale, frame.shape[0]*imgScale
-        newimg = cv2.resize(frame,(int(newX),int(newY)))
+        
+        
+        
+        
+        
+        #height, width, depth = frame.shape
+        #W = 300
+        #imgScale = W/width
+        #newX,newY = frame.shape[1]*imgScale, frame.shape[0]*imgScale
+        #newimg = cv2.resize(frame,(int(newX),int(newY)))
         #cv2.imshow("Show by CV2",newimg)
         vout.write(frame)
                 
