@@ -224,9 +224,15 @@ def process_video_feed(filename):
         #frame=cv2.transpose(frame)
         #frame=cv2.flip(frame,flipCode=1)    
         # send frame for face detection and recognition
-        bb_box = detector.detect_faces(frame)
-        bb_box = [i for i in bb_box if i['confidence'] >= 0.9 ]
+        file = 'temp.jpg'
+        cv2.imwrite(file,frame)
+        res = CF.face.detect(file)
+        #bb_box = detector.detect_faces(frame)
+        #bb_box = [i for i in bb_box if i['confidence'] >= 0.9 ]
         #print(bb_box)
+        print(res)
+        count += 1
+        continue
             
         nrof_faces = len(bb_box)
         
@@ -246,8 +252,8 @@ def process_video_feed(filename):
                 
                 
                 cropped_image.append(frame[det[1]:det[3], det[0]:det[2]].copy())
-                file = 'temp.jpg'
-                cv2.imwrite(file,cropped_image[-1])
+                #file = 'temp.jpg'
+                #cv2.imwrite(file,cropped_image[-1])
 
                 personIds = CF.person.lists(person_group_id)
                 personId = {person['personId']: person["name"] for person in personIds}                
@@ -400,11 +406,11 @@ def process_video_feed(filename):
         #cv2.imshow("Show by CV2",newimg)
         #print(frame.shape)
         #print(label_frame.shape)
-        cv2.imshow("Show by CV2",np.hstack((frame, decision_frame, picture_frame, label_frame)))
-        vout.write(np.hstack((frame, decision_frame, picture_frame, label_frame)))
+        #cv2.imshow("Show by CV2",np.hstack((frame, decision_frame, picture_frame, label_frame)))
+        #vout.write(np.hstack((frame, decision_frame, picture_frame, label_frame)))
                 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            sys.exit()        
+        #if cv2.waitKey(1) & 0xFF == ord('q'):
+        #    sys.exit()        
         #time.sleep(1)
         count += 1     
         
