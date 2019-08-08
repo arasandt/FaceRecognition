@@ -4,7 +4,7 @@ from __future__ import print_function
 
 
 import cognitive_face as CF
-KEY = 'ce7bf170a154482ba9ef08a557467576'  # Replace with a valid Subscription Key here.
+KEY = '<>'  # Replace with a valid Subscription Key here.
 CF.Key.set(KEY)
 BASE_URL = 'https://metfaceapi.cognitiveservices.azure.com/face/v1.0/'  # Replace with your regional Base URL
 CF.BaseUrl.set(BASE_URL)
