@@ -25,7 +25,7 @@ import win32pipe, win32file
 import os, cv2, sys, time
 import random
 import base64
-
+from datetime import date
 from extract_face import recognize_face
 
 import pickle
@@ -75,8 +75,6 @@ def check_auth(label_id, office, floor):
 
 class Person_Details():
     
-    
-    
     def __init__(self, label_id):
         self.id = label_id
         self.time_keeper = None
@@ -121,11 +119,120 @@ class Person_Details():
         self.window = collections.deque([], hits_window_size)
         self.cool_off_time = self.display_time + cool_time
 
+
+def draw_border(img, point1, point2, point3, point4, line_length):
+
+    x1, y1 = point1
+    x2, y2 = point2
+    x3, y3 = point3
+    x4, y4 = point4    
+
+    #cv2.circle(img, (x1, y1), 3, (255, 0, 255), -1)    #-- top_left
+    #cv2.circle(img, (x2, y2), 3, (255, 0, 255), -1)    #-- bottom-left
+    #cv2.circle(img, (x3, y3), 3, (255, 0, 255), -1)    #-- top-right
+    #cv2.circle(img, (x4, y4), 3, (255, 0, 255), -1)    #-- bottom-right
+
+    cv2.line(img, (x1, y1), (x1 , y1 + line_length), (0, 255, 0), 3)  #-- top-left
+    cv2.line(img, (x1, y1), (x1 + line_length , y1), (0, 255, 0), 3)
+
+    cv2.line(img, (x2, y2), (x2 , y2 - line_length), (0, 255, 0), 3)  #-- bottom-left
+    cv2.line(img, (x2, y2), (x2 + line_length , y2), (0, 255, 0), 3)
+
+    cv2.line(img, (x3, y3), (x3 - line_length, y3), (0, 255, 0), 3)  #-- top-right
+    cv2.line(img, (x3, y3), (x3, y3 + line_length), (0, 255, 0), 3)
+
+    cv2.line(img, (x4, y4), (x4 , y4 - line_length), (0, 255, 0), 3)  #-- bottom-right
+    cv2.line(img, (x4, y4), (x4 - line_length , y4), (0, 255, 0), 3)
+
+    return img
+
       
+class Unknown_Persons():
+    
+    size = 20
+    
+   
+    def __init__(self):
+        self.reset()
         
+    def reset(self):
+        self.xperson = collections.deque([],Unknown_Persons.size)    
+        self.prev_faces = None
+        self.last_unknown_time = datetime(1990, 11, 28, 23, 55, 59, 342380)
+        self.unknown_counter = 0
+        self.save_unknown_counter = -1
+        
+    def add(self,faceid,faceimg,facebb):
+        p = Person_Details(faceid)
+        p.assign_face(faceimg, facebb, 100)
+        self.xperson.append(p)
+        self.unknown_counter += 1
+
+    def get_face(self,faceid):
+        for i in self.xperson:
+            if i.id == faceid:
+                return i.face_img
+        return None
+    #def check_full(self):
+    #    return True if len(self.xperson) > Unknown_Persons.size else False
+    
+    def get_faceids(self):
+        return [i.id for i in self.xperson]
 
     
-
+    def find_unknown(self, count):
+#        if count % 50 == 0 and len(self.xperson) == Unknown_Persons.size:
+#            #print('re-analyzing unknown faces...')
+#            #print(len(self.xperson))
+#            pass
+#        else:
+#            
+        confidence = 0.8
+        faces = []
+        if len(self.xperson) == Unknown_Persons.size and count % 50 == 0:
+            if (datetime.now() - self.last_unknown_time) >= retention_time and self.unknown_counter == self.save_unknown_counter:
+                self.reset()
+                return []
+            unknown_faces = CF.face.group(self.get_faceids())
+            #print('Found ',len(unknown_faces['groups']), 'unknown groups')
+            max_val = max([len(i) for i in unknown_faces['groups']])
+            percentage = [len(i) / max_val for i in unknown_faces['groups']]
+            #print(percentage)
+            percentage = [cnt for cnt, i in enumerate(percentage) if i > confidence]
+            #print('Found ',len(percentage), 'unknown groups with confidence')
+            for i in percentage:
+                x = random.randint(1,len(unknown_faces['groups'][i]))
+                #faces.append()                
+                f = unknown_faces['groups'][i][x]
+                faces.append(self.get_face(f))
+                self.last_unknown_time = datetime.now()
+            self.prev_faces = faces
+            self.save_unknown_counter = self.unknown_counter
+            self.unknown_counter = 0
+        else:
+            return self.prev_faces
+        return faces
+                
+    
+    
+#        if len(unknown_faceIds) >= (3 * 25): # 3 seconds * 25 fps
+#            get_face = [i for i, j, k in unknown_faceIds]
+#            unknown_face = CF.face.group(get_face)
+#            print('Found ',len(unknown_face['groups']), 'unknown groups')
+#            percentage = [len(i) / (3 * 25) for i in unknown_face['groups']]
+#            #print(percentage)
+#            percentage = [cnt for cnt, i in enumerate(percentage) if i > 0.80]
+#            print('Found ',len(percentage), 'unknown groups with confidence')
+#            for i in percentage:
+#                x = random.randint(1,len(unknown_face['groups'][i]))
+#                find_face.append(unknown_face['groups'][i][x])
+#                x = random.randint(1,len(unknown_face['groups'][i]))
+#                find_face.append(unknown_face['groups'][i][x])
+#                x = random.randint(1,len(unknown_face['groups'][i]))
+#                find_face.append(unknown_face['groups'][i][x])
+        
+    
+    
 #
 #def close_pipe(pipe):
 #    win32file.CloseHandle(pipe)
@@ -203,9 +310,11 @@ def process_video_feed(filename):
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     vout = cv2.VideoWriter(filename + '.output.avi', fourcc, fps, (frame_width + label_size + picture_size + decision_size + unknown_size, frame_height))
     
-    unknown_faceIds = []
-    unknown_frame_copy = None
+    #unknown_faceIds = []
+    #unknown_frame_copy = None
+    up = Unknown_Persons()
     random.seed(9001)
+    find_face = []
     
     while True:
         (ret, frame) = video.read()
@@ -292,7 +401,9 @@ def process_video_feed(filename):
                     person_detail[label_id].assign_face(cropped_image[i], det, confidence)
                     person_detail[label_id].set_time(timestamp + timedelta(seconds=(count // fps)))                
                 else:
-                    unknown_faceIds.append((f,cropped_image[i],det))
+                    #unknown_faceIds.append((f,cropped_image[i],det))
+                    up.add(f,cropped_image[i],det)
+                    
                     #cv2.imwrite(f + '.jpg', cropped_image[i])
 #                    color = (255,0,255)
 #                    cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
@@ -304,25 +415,23 @@ def process_video_feed(filename):
             else:
                 person_detail[person].add_label(None)
         
-        unknown_face = []
-        find_face = []
+       
         
-        
-        if len(unknown_faceIds) >= (3 * 25): # 3 seconds * 25 fps
-            get_face = [i for i, j, k in unknown_faceIds]
-            unknown_face = CF.face.group(get_face)
-            print('Found ',len(unknown_face['groups']), 'unknown groups')
-            percentage = [len(i) / (3 * 25) for i in unknown_face['groups']]
-            #print(percentage)
-            percentage = [cnt for cnt, i in enumerate(percentage) if i > 0.80]
-            print('Found ',len(percentage), 'unknown groups with confidence')
-            for i in percentage:
-                x = random.randint(1,len(unknown_face['groups'][i]))
-                find_face.append(unknown_face['groups'][i][x])
-                x = random.randint(1,len(unknown_face['groups'][i]))
-                find_face.append(unknown_face['groups'][i][x])
-                x = random.randint(1,len(unknown_face['groups'][i]))
-                find_face.append(unknown_face['groups'][i][x])
+#        if len(unknown_faceIds) >= (3 * 25): # 3 seconds * 25 fps
+#            get_face = [i for i, j, k in unknown_faceIds]
+#            unknown_face = CF.face.group(get_face)
+#            print('Found ',len(unknown_face['groups']), 'unknown groups')
+#            percentage = [len(i) / (3 * 25) for i in unknown_face['groups']]
+#            #print(percentage)
+#            percentage = [cnt for cnt, i in enumerate(percentage) if i > 0.80]
+#            print('Found ',len(percentage), 'unknown groups with confidence')
+#            for i in percentage:
+#                x = random.randint(1,len(unknown_face['groups'][i]))
+#                find_face.append(unknown_face['groups'][i][x])
+#                x = random.randint(1,len(unknown_face['groups'][i]))
+#                find_face.append(unknown_face['groups'][i][x])
+#                x = random.randint(1,len(unknown_face['groups'][i]))
+#                find_face.append(unknown_face['groups'][i][x])
         #else if unknown_frame_copy is not None:
             
             #print(find_face)
@@ -365,26 +474,22 @@ def process_video_feed(filename):
         
         #row_gap = 10
         
+        find_face = up.find_unknown(count)
+             
         
-        
-        if find_face:
-            for a, i in enumerate(find_face):
-                last_img = [y for x, y, z in unknown_faceIds if x == i][0]
-                #print(type(last_img),last_img)
-                #last_img = CF.face.group(last_img)
-                #print(type(last_img))
-            #for a, grps in enumerate(unknown_face['groups']):
-            #    last_id = grps[-1] 
-            #    last_img = [y for x, y in unknown_faceIds if x == last_id][0]
-                y_offset = a * each_row_size
-                img_dis = cv2.resize(last_img,(each_row_size,unknown_size))
-                rows,cols,_ = img_dis.shape
-                unknown_frame[y_offset:y_offset + rows,:] = img_dis    
-            unknown_faceIds = []
-            unknown_frame_copy = unknown_frame.copy()
-            find_face = []
-        elif unknown_frame_copy is not None:
-            unknown_frame = unknown_frame_copy.copy()
+#        if find_face:
+#            for a, i in enumerate(find_face):
+#                #last_img = [y for x, y, z in unknown_faceIds if x == i][0]
+#                #print(type(last_img),last_img)
+#                #last_img = CF.face.group(last_img)
+#                #print(type(last_img))
+#            #for a, grps in enumerate(unknown_face['groups']):
+#            #    last_id = grps[-1] 
+#            #    last_img = [y for x, y in unknown_faceIds if x == last_id][0]
+#                y_offset = a * each_row_size
+#                img_dis = cv2.resize(i,(each_row_size,unknown_size))
+#                rows,cols,_ = img_dis.shape
+#                unknown_frame[y_offset:y_offset + rows,:] = img_dis    
 #        for x, y in enumerate(unknown_faceIds):
 #            id, face = y
 #            y_offset = x * each_row_size
@@ -407,8 +512,20 @@ def process_video_feed(filename):
                 
                 cv2.putText(label_frame, str(person) , (10, y_offset + each_row_size // 2 ), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 0), thickness=1, lineType=2) 
                 
-
+                i += 1
+        
+        if find_face:
+            for b in find_face:
+                y_offset = i * each_row_size
+                decision_frame[y_offset:y_offset + each_row_size,:] = np.full([each_row_size,decision_size,3],[0,0,255],dtype=np.uint8)
                 
+                img_dis = cv2.resize(b,(each_row_size,unknown_size))
+                rows,cols,_ = img_dis.shape
+                picture_frame[y_offset:y_offset + rows,:] = img_dis
+                
+                cv2.putText(label_frame, 'Unknown' , (10, y_offset + each_row_size // 2 ), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 0), thickness=1, lineType=2)
+                
+                i += 1
                 
 #                cv2.putText(label_frame, str(person) , (0, i * (label_size + row_gap) + row_gap * 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (255, 255, 255), thickness=1, lineType=2) 
 #                img_dis = cv2.resize(person_detail[person].face_img,(int(picture_size * 1), int(picture_size * 1)))
@@ -439,12 +556,22 @@ def process_video_feed(filename):
 
                 
         for det, lab, confi in face_box:
-            color = (0,0,255)             
+            color = (255,255,255)             
             if lab is None:
-                cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)        
+                #cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)        
+                #x1, y1 = (det[0], det[1])
+                #x2, y2 = (det[2], det[1])
+                #x3, y3 = (det[2], det[0])
+                #x4, y4 = (det[2], det[3])    
+                point1, point2, point3, point4 = (det[0],det[1]), (det[0],det[3]), (det[2],det[1]), (det[2],det[3])
+#    cv2.circle(img, (x1, y1), 3, (255, 0, 255), -1)    #-- top_left
+#    cv2.circle(img, (x2, y2), 3, (255, 0, 255), -1)    #-- bottom-left
+#    cv2.circle(img, (x3, y3), 3, (255, 0, 255), -1)    #-- top-right
+#    cv2.circle(img, (x4, y4), 3, (255, 0, 255), -1)    #-- bottom-right                
+                frame = draw_border(frame,point1, point2, point3, point4, 15)
                 text_x = det[0]
                 text_y = det[3] + 20            
-                cv2.putText(frame, 'Unknown', (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, color, thickness=1, lineType=2)            
+                #cv2.putText(frame, 'Unknown', (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, color, thickness=1, lineType=2)            
                 
         #cv2.imshow('Image',cv2.resize(frame, (500,500)))
         
