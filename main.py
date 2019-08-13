@@ -216,7 +216,7 @@ def process_video_feed(filename, pipe):
                 orig_image = cv2.resize(orig_image,(160,160))
                 #print(orig_image.shape)
                 #cv2.imshow('person',orig_image)
-                cv2.imwrite(str(count) + str(i) + '.jpg', orig_image)
+                #cv2.imwrite(str(count) + str(i) + '.jpg', orig_image)
                 label_id = recognize_face(orig_image, i)
                 # get label of persons identified and details
                 

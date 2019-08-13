@@ -203,7 +203,8 @@ def process_video_feed(filename):
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     vout = cv2.VideoWriter(filename + '.output.avi', fourcc, fps, (frame_width + label_size + picture_size + decision_size + unknown_size, frame_height))
     
-
+    unknown_faceIds = []
+    unknown_frame_copy = None
     random.seed(9001)
     
     while True:
@@ -291,8 +292,8 @@ def process_video_feed(filename):
                     person_detail[label_id].assign_face(cropped_image[i], det, confidence)
                     person_detail[label_id].set_time(timestamp + timedelta(seconds=(count // fps)))                
                 else:
-                    unknown_faceIds.append((f,cropped_image[i]))
-                    cv2.imwrite(f + '.jpg', cropped_image[i])
+                    unknown_faceIds.append((f,cropped_image[i],det))
+                    #cv2.imwrite(f + '.jpg', cropped_image[i])
 #                    color = (255,0,255)
 #                    cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)
        
@@ -303,13 +304,38 @@ def process_video_feed(filename):
             else:
                 person_detail[person].add_label(None)
         
-        #unknown_faceIds = unknown_faceIds[-3:]
-        unknown_face = {}
-        if len(unknown_faceIds) > 1:
-            get_face = [i for i, j in unknown_faceIds]
+        unknown_face = []
+        find_face = []
+        
+        
+        if len(unknown_faceIds) >= (3 * 25): # 3 seconds * 25 fps
+            get_face = [i for i, j, k in unknown_faceIds]
             unknown_face = CF.face.group(get_face)
-            #print('\n',len(unknown_face['groups']),'\n')
-            print(unknown_face['groups'])
+            print('Found ',len(unknown_face['groups']), 'unknown groups')
+            percentage = [len(i) / (3 * 25) for i in unknown_face['groups']]
+            #print(percentage)
+            percentage = [cnt for cnt, i in enumerate(percentage) if i > 0.80]
+            print('Found ',len(percentage), 'unknown groups with confidence')
+            for i in percentage:
+                x = random.randint(1,len(unknown_face['groups'][i]))
+                find_face.append(unknown_face['groups'][i][x])
+                x = random.randint(1,len(unknown_face['groups'][i]))
+                find_face.append(unknown_face['groups'][i][x])
+                x = random.randint(1,len(unknown_face['groups'][i]))
+                find_face.append(unknown_face['groups'][i][x])
+        #else if unknown_frame_copy is not None:
+            
+            #print(find_face)
+            #break
+        
+        
+        #unknown_faceIds = unknown_faceIds[-3:]
+#        unknown_face = {}
+#        if len(unknown_faceIds) > 1:
+#            get_face = [i for i, j in unknown_faceIds]
+#            unknown_face = CF.face.group(get_face)
+#            #print('\n',len(unknown_face['groups']),'\n')
+#            print(unknown_face['groups'])
 
         # did anybody reach hits required
         for person in list(person_detail.keys()):
@@ -329,32 +355,45 @@ def process_video_feed(filename):
         picture_frame = np.zeros((h, picture_size, 3), dtype=np.uint8)
         decision_frame = np.zeros((h, decision_size, 3), dtype=np.uint8)
         unknown_frame = np.zeros((h, unknown_size, 3), dtype=np.uint8)
+        #unknown_frame_copy = np.zeros((h, unknown_size, 3), dtype=np.uint8)
         
         label_frame.fill(255)
         picture_frame.fill(255)
         decision_frame.fill(255)
         unknown_frame.fill(255)
+        #unknown_frame_copy.fill(255)
         
         #row_gap = 10
         
-        i = 0
         
-        if unknown_face:
-            for a, grps in enumerate(unknown_face['groups']):
-                last_id = grps[-1] 
-                last_img = [y for x, y in unknown_faceIds if x == last_id][0]
+        
+        if find_face:
+            for a, i in enumerate(find_face):
+                last_img = [y for x, y, z in unknown_faceIds if x == i][0]
+                #print(type(last_img),last_img)
+                #last_img = CF.face.group(last_img)
+                #print(type(last_img))
+            #for a, grps in enumerate(unknown_face['groups']):
+            #    last_id = grps[-1] 
+            #    last_img = [y for x, y in unknown_faceIds if x == last_id][0]
                 y_offset = a * each_row_size
                 img_dis = cv2.resize(last_img,(each_row_size,unknown_size))
                 rows,cols,_ = img_dis.shape
                 unknown_frame[y_offset:y_offset + rows,:] = img_dis    
-            
+            unknown_faceIds = []
+            unknown_frame_copy = unknown_frame.copy()
+            find_face = []
+        elif unknown_frame_copy is not None:
+            unknown_frame = unknown_frame_copy.copy()
 #        for x, y in enumerate(unknown_faceIds):
 #            id, face = y
 #            y_offset = x * each_row_size
 #            img_dis = cv2.resize(face,(each_row_size,unknown_size))
 #            rows,cols,_ = img_dis.shape
 #            unknown_frame[y_offset:y_offset + rows,:] = img_dis    
-            
+        
+        i = 0    
+        
         for person in person_detail.keys():
         
             if person_detail[person].display:
@@ -400,16 +439,20 @@ def process_video_feed(filename):
 
                 
         for det, lab, confi in face_box:
-            color = (255,0,0)             
+            color = (0,0,255)             
             if lab is None:
                 cv2.rectangle(frame, (det[0], det[1]), (det[2], det[3]), color, 2)        
+                text_x = det[0]
+                text_y = det[3] + 20            
+                cv2.putText(frame, 'Unknown', (text_x, text_y), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, color, thickness=1, lineType=2)            
+                
         #cv2.imshow('Image',cv2.resize(frame, (500,500)))
         
         final_frame = np.hstack((frame, decision_frame, picture_frame, label_frame, unknown_frame))
         from win32api import GetSystemMetrics
         width = GetSystemMetrics(0)
         height = GetSystemMetrics(1)        
-        cv2.imshow("Show by CV2",cv2.resize(final_frame, (width-20,height-20)))
+        cv2.imshow("Show by CV2",cv2.resize(final_frame, (int(width*0.75),int(height*0.75))))
         vout.write(final_frame)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
