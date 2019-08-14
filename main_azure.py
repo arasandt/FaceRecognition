@@ -44,6 +44,19 @@ decision_size = 50
 each_row_size = 100
 unknown_size = 100
 
+
+def increase_brightness(img, value=30):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+
+    lim = 255 - value
+    v[v > lim] = 255
+    v[v <= lim] += value
+
+    final_hsv = cv2.merge((h, s, v))
+    img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+    return img
+
 def check_auth(label_id, office, floor):
     label_id = str(label_id)
     office = str(office)
@@ -201,8 +214,9 @@ class Unknown_Persons():
             percentage = [cnt for cnt, i in enumerate(percentage) if i > confidence]
             #print('Found ',len(percentage), 'unknown groups with confidence')
             for i in percentage:
-                x = random.randint(1,len(unknown_faces['groups'][i]))
+                x = random.randint(0,len(unknown_faces['groups'][i]) - 1)
                 #faces.append()                
+                #print(unknown_faces, i , x)
                 f = unknown_faces['groups'][i][x]
                 faces.append(self.get_face(f))
                 self.last_unknown_time = datetime.now()
@@ -508,7 +522,7 @@ def process_video_feed(filename):
                 
                 img_dis = cv2.resize(person_detail[person].face_img,(each_row_size,picture_size))
                 rows,cols,_ = img_dis.shape
-                picture_frame[y_offset:y_offset + rows,:] = img_dis
+                picture_frame[y_offset:y_offset + rows,:] = increase_brightness(img_dis)
                 
                 cv2.putText(label_frame, str(person) , (10, y_offset + each_row_size // 2 ), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 0), thickness=1, lineType=2) 
                 
@@ -521,7 +535,7 @@ def process_video_feed(filename):
                 
                 img_dis = cv2.resize(b,(each_row_size,unknown_size))
                 rows,cols,_ = img_dis.shape
-                picture_frame[y_offset:y_offset + rows,:] = img_dis
+                picture_frame[y_offset:y_offset + rows,:] = increase_brightness(img_dis)
                 
                 cv2.putText(label_frame, 'Unknown' , (10, y_offset + each_row_size // 2 ), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 0), thickness=1, lineType=2)
                 
@@ -549,7 +563,7 @@ def process_video_feed(filename):
 #                print(x_offset,y_offset)
 #                decision_frame[y_offset:y_offset+rows, x_offset: x_offset+cols] = color_img
                 
-                i += 1
+                #i += 1
                 
                 
                 #cv2.imshow('Image', np.hstack((picture_frame, label_frame, decision_frame, unknown_frame)))
@@ -608,7 +622,7 @@ if __name__ == '__main__':
     if action == 'run':
         #pipe = create_pipe()
         #pipe = None
-        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12349.mp4')
+        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12350.mp4')
         #close_pipe(pipe)
 
     
