@@ -43,6 +43,7 @@ picture_size = 100
 decision_size = 50
 each_row_size = 100
 unknown_size = 100
+time_size = 30
 
 
 def increase_brightness(img, value=30):
@@ -322,7 +323,7 @@ def process_video_feed(filename):
     frame_height = int(video.get(4))
     
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    vout = cv2.VideoWriter(filename + '.output.avi', fourcc, fps, (frame_width + label_size + picture_size + decision_size + unknown_size, frame_height))
+    vout = cv2.VideoWriter(filename + '.output.avi', fourcc, fps, (frame_width + label_size + picture_size + decision_size + unknown_size, frame_height + time_size))
     
     #unknown_faceIds = []
     #unknown_frame_copy = None
@@ -347,6 +348,7 @@ def process_video_feed(filename):
         picture_frame = np.zeros((h, picture_size, 3), dtype=np.uint8)
         decision_frame = np.zeros((h, decision_size, 3), dtype=np.uint8)
         unknown_frame = np.zeros((h, unknown_size, 3), dtype=np.uint8)
+        
         #unknown_frame_copy = np.zeros((h, unknown_size, 3), dtype=np.uint8)
         
         label_frame.fill(255)
@@ -356,7 +358,7 @@ def process_video_feed(filename):
 
         
         if fgmean > 0.01:
-            print('{0}_{1} :          '.format(count,length), end='\r')
+            print('{0}_{1}            '.format(count,length), end='\r')
 #        if count < 36:
 #            count += 1
 #            continue
@@ -598,7 +600,19 @@ def process_video_feed(filename):
         #cv2.imshow('Image',cv2.resize(frame, (500,500)))
         else:
             print('{0}_{1} : No Motion'.format(count,length), end='\r')    
-        final_frame = np.hstack((frame, decision_frame, picture_frame, label_frame, unknown_frame))
+        
+        
+        
+        
+        
+        fin_frame = np.hstack((frame, decision_frame, picture_frame, label_frame, unknown_frame))
+        #print(fin_frame.shape)
+        time_frame = np.zeros((time_size, fin_frame.shape[1], 3), dtype=np.uint8)
+        
+        #print(time_frame.shape)
+        cv2.putText(time_frame, (timestamp + timedelta(seconds=int(count/fps))).strftime('%m/%d/%Y %I:%M:%S %p'), (5, 20), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (255,255,255), thickness=1, lineType=2)     
+        
+        final_frame = np.vstack((time_frame, fin_frame))
         from win32api import GetSystemMetrics
         width = GetSystemMetrics(0)
         height = GetSystemMetrics(1)        
@@ -631,7 +645,7 @@ if __name__ == '__main__':
     if action == 'run':
         #pipe = create_pipe()
         #pipe = None
-        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12350.mp4')
+        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12349.mp4')
         #close_pipe(pipe)
 
     
