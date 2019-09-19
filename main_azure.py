@@ -19,6 +19,7 @@ from utils import getFileTime
 from datetime import timedelta, datetime
 from dateutil import tz
 import numpy as np
+import pandas as pd
 import collections 
 
 import win32pipe, win32file
@@ -164,7 +165,6 @@ def draw_border(img, point1, point2, point3, point4, line_length):
 class Unknown_Persons():
     
     size = 20
-    
    
     def __init__(self):
         self.reset()
@@ -176,17 +176,20 @@ class Unknown_Persons():
         self.unknown_counter = 0
         self.save_unknown_counter = -1
         
-    def add(self,faceid,faceimg,facebb):
+    def add(self,faceid,faceimg,facebb,t):
         p = Person_Details(faceid)
         p.assign_face(faceimg, facebb, 100)
+        p.set_time(t)                
         self.xperson.append(p)
         self.unknown_counter += 1
 
     def get_face(self,faceid):
         for i in self.xperson:
             if i.id == faceid:
-                return i.face_img
-        return None
+                return (i.id, i.face_img, i.bb_box, i.time_keeper_fmt)
+        return (None, None, None, None)
+    
+    
     #def check_full(self):
     #    return True if len(self.xperson) > Unknown_Persons.size else False
     
@@ -202,6 +205,7 @@ class Unknown_Persons():
 #        else:
 #            
         confidence = 0.8
+        
         faces = []
         if len(self.xperson) == Unknown_Persons.size and count % 50 == 0:
             if (datetime.now() - self.last_unknown_time) >= retention_time and self.unknown_counter == self.save_unknown_counter:
@@ -332,6 +336,9 @@ def process_video_feed(filename):
     find_face = []
     fgbg = cv2.bgsegm.createBackgroundSubtractorMOG()
     
+    unknown_num = 1
+    unknown_df = pd.DataFrame(columns=['Count', 'CameraName', 'TimeStamp', 'FaceID', 'BoundingBox'])    
+    
     while True:
         (ret, frame) = video.read()
         
@@ -437,7 +444,7 @@ def process_video_feed(filename):
                         person_detail[label_id].set_time(timestamp + timedelta(seconds=(count // fps)))                
                     else:
                         #unknown_faceIds.append((f,cropped_image[i],det))
-                        up.add(f,cropped_image[i],det)
+                        up.add(f,cropped_image[i],det,timestamp + timedelta(seconds=(count // fps)))
                         
                         #cv2.imwrite(f + '.jpg', cropped_image[i])
     #                    color = (255,0,255)
@@ -498,7 +505,12 @@ def process_video_feed(filename):
             
             #row_gap = 10
             
-            find_face = up.find_unknown(count)
+            face_obs = up.find_unknown(count)
+            #return (i.id, i.face_img, i.bb_box, i.time_keeper_fmt)
+            find_face_id = [i for i,j,k,l in face_obs] if face_obs is not None else []    
+            find_face = [j for i,j,k,l in face_obs] if face_obs is not None else []
+            find_face_box = [k for i,j,k,l in face_obs] if face_obs is not None else []
+            find_face_time = [l for i,j,k,l in face_obs] if face_obs is not None else []
                  
             
     #        if find_face:
@@ -539,7 +551,7 @@ def process_video_feed(filename):
                     i += 1
             
             if find_face:
-                for b in find_face:
+                for cc, b in enumerate(find_face):
                     y_offset = i * each_row_size
                     decision_frame[y_offset:y_offset + each_row_size,:] = np.full([each_row_size,decision_size,3],[0,0,255],dtype=np.uint8)
                     
@@ -547,7 +559,21 @@ def process_video_feed(filename):
                     rows,cols,_ = img_dis.shape
                     picture_frame[y_offset:y_offset + rows,:] = increase_brightness(img_dis)
                     
+                    
+                    
                     cv2.putText(label_frame, 'Unknown' , (10, y_offset + each_row_size // 2 ), cv2.FONT_HERSHEY_COMPLEX_SMALL,1, (0, 0, 0), thickness=1, lineType=2)
+                    temp_dict = {}
+                    #print(face_inst[cc])
+                    temp_dict[unknown_num] = {'Count'     : unknown_num, 
+                                             'CameraName' : camera_name,
+                                             'TimeStamp'  : find_face_time[cc],
+                                             'FaceID'     : find_face_id[cc],
+                                             'BoundingBox': tuple(find_face_box[cc]) }
+                    unknown_df = unknown_df.append(pd.DataFrame.from_dict(temp_dict, orient='index'), ignore_index=True, sort=False)                   
+                    unknown_num += 1
+                    filn = find_face_id[cc] + '.jpg'
+                    if not os.path.exists(filn):
+                        cv2.imwrite(filn, b)
                     
                     i += 1
                     
@@ -623,16 +649,32 @@ def process_video_feed(filename):
             sys.exit()           
         
         count += 1
-        continue
+        
             
 
         
         
-        
-        
+    unknown_df = unknown_df.groupby(['CameraName', 'TimeStamp', 'FaceID', 'BoundingBox'], as_index=False).last()
+    
+    #print(unknown_df)
+    unknown_df = unknown_df[['CameraName', 'TimeStamp', 'FaceID', 'BoundingBox']]
+    unknown_df.to_csv(name_with_ext + '_unknowns.csv', header=True, sep=',', index=False)        
+    
     vout.release()        
     video.release()
 
+
+
+def show_report(report):
+    rep_df = pd.read_csv(report)
+    rep_df['Image'] = '<img src="' + rep_df['FaceID']+ '.jpg" style="width:100px;height:100px;">'
+    rep_html = rep_df.to_html()
+    rep_html = rep_html.replace('&lt;','<')
+    rep_html = rep_html.replace('&gt;','>')
+    Html_file= open(report + '.html',"w")
+    Html_file.write(rep_html)
+    Html_file.close()
+    
 
 if __name__ == '__main__':
     action = None
@@ -645,7 +687,13 @@ if __name__ == '__main__':
     if action == 'run':
         #pipe = create_pipe()
         #pipe = None
-        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12349.mp4')
+        process_video_feed('input/1d4750c785cec00_KNC_6_DoorCamera_12351.mp4')
+        #close_pipe(pipe)
+
+    if action == 'report':
+        #pipe = create_pipe()
+        #pipe = None
+        show_report('1d4750c785cec00_KNC_6_DoorCamera_12351.mp4_unknowns.csv')
         #close_pipe(pipe)
 
     
